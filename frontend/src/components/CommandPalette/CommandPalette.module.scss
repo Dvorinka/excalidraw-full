@@ -1,0 +1,115 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 560px;
+  background: var(--color-surface-lowest);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-gray-20);
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-gray-20);
+}
+
+.inputIcon {
+  color: var(--color-gray-50);
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--text-base);
+  color: var(--color-gray-95);
+  padding: 0;
+
+  &::placeholder {
+    color: var(--color-gray-50);
+  }
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-gray-50);
+  background: var(--color-gray-10);
+  border: 1px solid var(--color-gray-20);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-gray-85);
+  transition: background 0.1s ease;
+
+  &:hover,
+  &.selected {
+    background: var(--color-gray-10);
+  }
+}
+
+.itemIcon {
+  color: var(--color-gray-60);
+  flex-shrink: 0;
+}
+
+.itemLabel {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.itemShortcut {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-gray-50);
+  background: var(--color-gray-10);
+  border: 1px solid var(--color-gray-20);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+}
+
+.empty {
+  padding: var(--space-6);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-gray-50);
+}

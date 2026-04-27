@@ -1,0 +1,813 @@
+openapi: 3.0.3
+info:
+  title: Excalidraw FULL API
+  description: API for the visual workspace platform
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HealthResponse' } } } }
+        '503': { description: Unhealthy, content: { application/json: { schema: { $ref: '#/components/schemas/HealthResponse' } } } }
+  /api/auth/signup:
+    post:
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  session: { $ref: '#/components/schemas/Session' }
+        '429': { description: Rate limited }
+  /api/auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { description: Invalid credentials }
+  /api/auth/logout:
+    post:
+      operationId: logout
+      responses:
+        '200': { description: Logged out }
+  /api/auth/me:
+    get:
+      operationId: getMe
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { description: Not authenticated }
+  /api/teams:
+    get:
+      operationId: listTeams
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: List of teams
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Team' } }
+    post:
+      operationId: createTeam
+      security: [ { cookieAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTeamRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Team' }
+  /api/teams/{teamID}/members:
+    get:
+      operationId: listTeamMembers
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: teamID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/TeamMember' } }
+  /api/teams/{teamID}/invites:
+    get:
+      operationId: listTeamInvites
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: teamID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Invites
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/TeamInvite' } }
+    post:
+      operationId: createTeamInvite
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: teamID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateInviteRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invite: { $ref: '#/components/schemas/TeamInvite' }
+                  token: { type: string }
+  /api/invites/accept:
+    post:
+      operationId: acceptInvite
+      security: [ { cookieAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Membership created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamMember' }
+  /api/drawings:
+    get:
+      operationId: listDrawings
+      security: [ { cookieAuth: [] } ]
+      parameters:
+        - { name: team_id, in: query, schema: { type: string } }
+        - { name: folder_id, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Drawings
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Drawing' } }
+    post:
+      operationId: createDrawing
+      security: [ { cookieAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDrawingRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+  /api/drawings/{drawingID}:
+    get:
+      operationId: getDrawing
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Drawing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Drawing' }
+        '404': { description: Not found }
+    patch:
+      operationId: updateDrawing
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDrawingRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated_at: { type: string, format: date-time }
+        '404': { description: Not found }
+    delete:
+      operationId: archiveDrawing
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '204': { description: Archived }
+  /api/drawings/{drawingID}/revisions:
+    get:
+      operationId: listRevisions
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Revisions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DrawingRevision' } }
+    post:
+      operationId: createRevision
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [change_summary, snapshot]
+              properties:
+                change_summary: { type: string, maxLength: 240 }
+                snapshot: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DrawingRevision' }
+  /api/drawings/{drawingID}/permissions:
+    get:
+      operationId: listPermissions
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Grants
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PermissionGrant' } }
+    post:
+      operationId: createPermission
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePermissionGrantRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PermissionGrant' }
+  /api/drawings/{drawingID}/share-links:
+    get:
+      operationId: listShareLinks
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Links
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ShareLink' } }
+    post:
+      operationId: createShareLink
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateShareLinkRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_link: { $ref: '#/components/schemas/ShareLink' }
+                  token: { type: string }
+  /api/drawings/{drawingID}/assets:
+    get:
+      operationId: listAssets
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Assets
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Asset' } }
+    post:
+      operationId: createAsset
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAssetRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Asset' }
+  /api/drawings/{drawingID}/embeds:
+    get:
+      operationId: listEmbeds
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Embeds
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Embed' } }
+    post:
+      operationId: createEmbed
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEmbedRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Embed' }
+  /api/drawings/{drawingID}/links:
+    get:
+      operationId: listLinks
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Links
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/LinkReference' } }
+    post:
+      operationId: createLink
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: drawingID, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLinkRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LinkReference' }
+  /api/shared/{token}:
+    get:
+      operationId: getSharedResource
+      parameters: [ { name: token, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Shared drawing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedResource' }
+        '404': { description: Invalid or expired token }
+  /api/search:
+    get:
+      operationId: searchDrawings
+      security: [ { cookieAuth: [] } ]
+      parameters: [ { name: q, in: query, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: Results
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Drawing' } }
+  /api/templates:
+    get:
+      operationId: listTemplates
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: Templates
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Template' } }
+  /api/activity:
+    get:
+      operationId: listActivity
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: Activity
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Activity' } }
+  /api/stats:
+    get:
+      operationId: getStats
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceStats' }
+  /api/folders:
+    get:
+      operationId: listFolders
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: Folders
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Folder' } }
+    post:
+      operationId: createFolder
+      security: [ { cookieAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateFolderRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+  /api/projects:
+    get:
+      operationId: listProjects
+      security: [ { cookieAuth: [] } ]
+      responses:
+        '200':
+          description: Projects
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Project' } }
+    post:
+      operationId: createProject
+      security: [ { cookieAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: excalidraw_session
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, unhealthy] }
+    User:
+      type: object
+      required: [id, name, username, email]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: string }
+        email: { type: string }
+        avatar_url: { type: string, nullable: true }
+        locale: { type: string }
+        timezone: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Session:
+      type: object
+      required: [id, user_id, token, expires_at]
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    Team:
+      type: object
+      required: [id, name, slug, created_by]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        avatar_url: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TeamMember:
+      type: object
+      required: [id, team_id, user_id, role]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        user_id: { type: string }
+        role: { type: string, enum: [owner, admin, editor, viewer] }
+        created_at: { type: string, format: date-time }
+    TeamInvite:
+      type: object
+      required: [id, team_id, email, role, invited_by]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        email: { type: string }
+        role: { type: string }
+        invited_by: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    Drawing:
+      type: object
+      required: [id, team_id, title, owner_user_id, visibility]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        folder_id: { type: string, nullable: true }
+        project_id: { type: string, nullable: true }
+        slug: { type: string, nullable: true }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        owner_user_id: { type: string }
+        latest_revision_id: { type: string, nullable: true }
+        visibility: { type: string, enum: [private, team, public] }
+        is_archived: { type: boolean }
+        thumbnail_asset_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time, nullable: true }
+        owner: { $ref: '#/components/schemas/User' }
+        folder: { $ref: '#/components/schemas/Folder' }
+        project: { $ref: '#/components/schemas/Project' }
+    DrawingRevision:
+      type: object
+      required: [id, drawing_id, change_summary, created_at, created_by]
+      properties:
+        id: { type: string }
+        drawing_id: { type: string }
+        change_summary: { type: string }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string }
+        snapshot: { type: string }
+    Project:
+      type: object
+      required: [id, team_id, name, slug, created_by]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Folder:
+      type: object
+      required: [id, team_id, name, slug, path_cache, visibility, created_by]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        project_id: { type: string, nullable: true }
+        parent_folder_id: { type: string, nullable: true }
+        name: { type: string }
+        slug: { type: string }
+        path_cache: { type: string }
+        visibility: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Activity:
+      type: object
+      required: [id, team_id, user_id, action, resource_type, resource_id, created_at]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        user_id: { type: string }
+        action: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        metadata: { type: object }
+        created_at: { type: string, format: date-time }
+    Template:
+      type: object
+      required: [id, name, scope]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        scope: { type: string, enum: [user, team, global] }
+        team_id: { type: string, nullable: true }
+        category: { type: string, nullable: true }
+        tags: { type: array, items: { type: string } }
+        preview_asset_id: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    PermissionGrant:
+      type: object
+      required: [id, resource_type, resource_id, user_id, permission, granted_by]
+      properties:
+        id: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        user_id: { type: string }
+        permission: { type: string, enum: [read, write, admin] }
+        granted_by: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    ShareLink:
+      type: object
+      required: [id, resource_type, resource_id, access_level, created_by]
+      properties:
+        id: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        access_level: { type: string, enum: [view, comment, edit] }
+        password_hash: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    Asset:
+      type: object
+      required: [id, drawing_id, type, name]
+      properties:
+        id: { type: string }
+        drawing_id: { type: string }
+        type: { type: string }
+        name: { type: string }
+        url: { type: string, nullable: true }
+        file_path: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    Embed:
+      type: object
+      required: [id, drawing_id, url, type]
+      properties:
+        id: { type: string }
+        drawing_id: { type: string }
+        url: { type: string }
+        type: { type: string }
+        title: { type: string, nullable: true }
+        thumbnail_url: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    LinkReference:
+      type: object
+      required: [id, source_type, source_id, target_type, target_id]
+      properties:
+        id: { type: string }
+        source_type: { type: string }
+        source_id: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        relation: { type: string }
+        created_at: { type: string, format: date-time }
+    SharedResource:
+      type: object
+      required: [drawing, share_link]
+      properties:
+        drawing: { $ref: '#/components/schemas/Drawing' }
+        share_link: { $ref: '#/components/schemas/ShareLink' }
+    WorkspaceStats:
+      type: object
+      required: [total_teams, total_drawings, total_members, recent_activity]
+      properties:
+        total_teams: { type: integer }
+        total_drawings: { type: integer }
+        total_members: { type: integer }
+        recent_activity: { type: array, items: { $ref: '#/components/schemas/Activity' } }
+    CreateTeamRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+        avatar_url: { type: string, nullable: true }
+    CreateDrawingRequest:
+      type: object
+      required: [team_id, title, elements]
+      properties:
+        team_id: { type: string }
+        folder_id: { type: string, nullable: true }
+        project_id: { type: string, nullable: true }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        visibility: { type: string, enum: [private, team, public], default: team }
+        elements: { type: string }
+    UpdateDrawingRequest:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string, nullable: true }
+        folder_id: { type: string, nullable: true }
+        project_id: { type: string, nullable: true }
+        visibility: { type: string, enum: [private, team, public] }
+        is_archived: { type: boolean }
+        elements: { type: string }
+    CreateFolderRequest:
+      type: object
+      required: [team_id, name]
+      properties:
+        team_id: { type: string }
+        project_id: { type: string, nullable: true }
+        parent_folder_id: { type: string, nullable: true }
+        name: { type: string }
+        visibility: { type: string }
+    CreateProjectRequest:
+      type: object
+      required: [team_id, name]
+      properties:
+        team_id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+    CreateInviteRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, editor, viewer] }
+    CreatePermissionGrantRequest:
+      type: object
+      required: [user_id, permission]
+      properties:
+        user_id: { type: string }
+        permission: { type: string, enum: [read, write, admin] }
+        expires_at: { type: string, format: date-time, nullable: true }
+    CreateShareLinkRequest:
+      type: object
+      required: [access_level]
+      properties:
+        access_level: { type: string, enum: [view, comment, edit] }
+        password: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+    CreateAssetRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        url: { type: string, nullable: true }
+        file_path: { type: string, nullable: true }
+    CreateEmbedRequest:
+      type: object
+      required: [url, type]
+      properties:
+        url: { type: string }
+        type: { type: string }
+        title: { type: string, nullable: true }
+        thumbnail_url: { type: string, nullable: true }
+    CreateLinkRequest:
+      type: object
+      required: [target_type, target_id]
+      properties:
+        target_type: { type: string }
+        target_id: { type: string }
+        relation: { type: string }

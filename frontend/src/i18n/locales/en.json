@@ -1,0 +1,139 @@
+{
+  "app": {
+    "name": "Excalidraw FULL"
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "edit": "Edit",
+    "back": "Back",
+    "search": "Search",
+    "submit": "Submit",
+    "close": "Close",
+    "confirm": "Confirm",
+    "error": "Error",
+    "success": "Success",
+    "or": "or",
+    "continueWith": "or continue with"
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to your Excalidraw FULL account",
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@example.com",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "signIn": "Sign In",
+      "noAccount": "Don't have an account?",
+      "signUpLink": "Sign up",
+      "errorInvalid": "Invalid email or password"
+    },
+    "signup": {
+      "title": "Create account",
+      "subtitle": "Start your visual workspace journey",
+      "nameLabel": "Full Name",
+      "namePlaceholder": "John Doe",
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@example.com",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Create a strong password",
+      "createAccount": "Create Account",
+      "hasAccount": "Already have an account?",
+      "signInLink": "Sign in",
+      "errorCreate": "Could not create account"
+    },
+    "oauth": {
+      "github": "GitHub"
+    }
+  },
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "files": "Files",
+    "projects": "Projects",
+    "templates": "Templates",
+    "library": "Library",
+    "team": "Team",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "welcome": "Welcome back, {{name}}",
+    "subtitle": "Here's what's happening in your workspace",
+    "newDrawing": "New Drawing",
+    "creating": "Creating...",
+    "stats": {
+      "drawings": "Drawings",
+      "projects": "Projects",
+      "folders": "Folders",
+      "teams": "Teams",
+      "revisions": "Revisions",
+      "storage": "Storage"
+    },
+    "recentDrawings": "Recent Drawings",
+    "noDrawings": "No recent drawings",
+    "noDrawingsSub": "Create your first drawing to get started"
+  },
+  "editor": {
+    "back": "Back",
+    "saveNow": "Save Now",
+    "loadingCanvas": "Loading Excalidraw...",
+    "errorLoad": "Failed to load drawing",
+    "errorSave": "Failed to save:",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "unsaved": "Unsaved changes",
+    "revisions": "revisions",
+    "revision": "Revision",
+    "revisionBrowser": "Revision Browser",
+    "noRevisions": "No revisions yet",
+    "goToDashboard": "Go to Dashboard",
+    "notFound": "Drawing not found",
+    "presenterNotes": "Presenter Notes",
+    "notesPlaceholder": "Add notes for your presentation..."
+  },
+  "fileBrowser": {
+    "title": "Projects"
+  },
+  "templates": {
+    "title": "Templates"
+  },
+  "teamSettings": {
+    "title": "Team Settings"
+  },
+  "userSettings": {
+    "title": "Settings",
+    "subtitle": "Manage your account preferences",
+    "language": "Language",
+    "theme": "Theme",
+    "tabProfile": "Profile",
+    "tabAccount": "Account",
+    "tabNotifications": "Notifications",
+    "tabAppearance": "Appearance",
+    "profileInfo": "Profile Information",
+    "changeAvatar": "Change Avatar",
+    "username": "Username",
+    "saveChanges": "Save Changes",
+    "accountSecurity": "Account Security",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "updatePassword": "Update Password",
+    "notificationPrefs": "Notification Preferences",
+    "emailMentions": "Email notifications for mentions",
+    "emailInvites": "Email notifications for team invites",
+    "weeklySummary": "Weekly activity summary",
+    "appearance": "Appearance",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "commandPalette": {
+    "placeholder": "Search commands...",
+    "noResults": "No matching commands"
+  },
+  "search": {
+    "noResults": "No results"
+  }
+}

@@ -1,0 +1,64 @@
+@use '../../styles/variables' as *;
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--input-label-color);
+}
+
+.input {
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-base);
+  font-family: var(--ui-font);
+  background: var(--input-bg-color);
+  border: 1px solid var(--input-border-color);
+  border-radius: var(--border-radius-md);
+  color: var(--color-on-surface);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  &:hover:not(:focus):not(:disabled) {
+    background: var(--input-hover-bg-color);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &::placeholder {
+    color: var(--color-gray-50);
+  }
+}
+
+.error {
+  border-color: var(--color-danger);
+
+  &:focus {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px var(--color-danger-background);
+  }
+}
+
+.errorText {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
+
+.helperText {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}

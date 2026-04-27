@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   netpod:
     image: busybox:latest
@@ -34,16 +32,44 @@ services:
       start_period: 10s
     network_mode: service:netpod
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: excalidraw-dex-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: excalidraw
+      POSTGRES_PASSWORD: excalidraw
+      POSTGRES_DB: excalidraw
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U excalidraw -d excalidraw"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - excalidraw-network
+
   excalidraw:
     image: ghcr.io/betterandbetterii/excalidraw-full:latest
+    environment:
+      - STORAGE_TYPE=${STORAGE_TYPE:-postgres}
+      - DATABASE_URL=${DATABASE_URL:-postgres://excalidraw:excalidraw@postgres:5432/excalidraw?sslmode=disable}
     volumes:
-      - ./data:/root/data
-      - ./excalidraw.db:/root/excalidraw.db:Z
+      # NOTE: Using a named Docker volume so data is managed by Docker.
+      # Use `docker compose down -v` or `docker system prune -a --volumes` to remove.
+      - excalidraw_data:/root/data
       - ./.env:/root/.env
     depends_on:
       dex:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     network_mode: service:netpod
+
+volumes:
+  postgres_data:
+  excalidraw_data:
 
 networks:
   excalidraw-network:

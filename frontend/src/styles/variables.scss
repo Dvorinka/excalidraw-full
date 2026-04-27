@@ -1,0 +1,293 @@
+// Excalidraw FULL - Design Tokens
+// Based on Excalidraw's hand-drawn aesthetic
+
+// ============================================
+// Color Palette
+// ============================================
+
+// Primary Purple
+$color-primary: #6965db;
+$color-primary-darker: #5b57d1;
+$color-primary-darkest: #4a47b1;
+$color-primary-light: #e3e2fe;
+$color-primary-light-darker: #d7d5ff;
+$color-primary-hover: #5753d0;
+
+// Grays
+$color-gray-10: #f5f5f5;
+$color-gray-20: #ebebeb;
+$color-gray-30: #d6d6d6;
+$color-gray-40: #b8b8b8;
+$color-gray-50: #999999;
+$color-gray-60: #7a7a7a;
+$color-gray-70: #5c5c5c;
+$color-gray-80: #3d3d3d;
+$color-gray-85: #242424;
+$color-gray-90: #1e1e1e;
+$color-gray-100: #121212;
+
+// Semantic Colors
+$color-success: #cafccc;
+$color-success-darker: #bafabc;
+$color-success-darkest: #a5eba8;
+$color-success-text: #268029;
+$color-success-contrast: #65bb6a;
+
+$color-warning: #fceeca;
+$color-warning-dark: #f5c354;
+$color-warning-darker: #f3ab2c;
+$color-warning-darkest: #ec8b14;
+
+$color-danger: #db6965;
+$color-danger-dark: #d65550;
+$color-danger-darker: #d1413c;
+$color-danger-text: #700000;
+$color-danger-background: #fff0f0;
+$color-danger-icon-background: #ffdad6;
+$color-danger-icon-color: #700000;
+
+// ============================================
+// CSS Variables
+// ============================================
+
+:root {
+  // Primary
+  --color-primary: #{$color-primary};
+  --color-primary-darker: #{$color-primary-darker};
+  --color-primary-darkest: #{$color-primary-darkest};
+  --color-primary-light: #{$color-primary-light};
+  --color-primary-light-darker: #{$color-primary-light-darker};
+  --color-primary-hover: #{$color-primary-hover};
+  --color-brand-active: var(--color-primary-darkest);
+
+  // Grays
+  --color-gray-10: #{$color-gray-10};
+  --color-gray-20: #{$color-gray-20};
+  --color-gray-30: #{$color-gray-30};
+  --color-gray-40: #{$color-gray-40};
+  --color-gray-50: #{$color-gray-50};
+  --color-gray-60: #{$color-gray-60};
+  --color-gray-70: #{$color-gray-70};
+  --color-gray-80: #{$color-gray-80};
+  --color-gray-85: #{$color-gray-85};
+  --color-gray-90: #{$color-gray-90};
+  --color-gray-100: #{$color-gray-100};
+
+  // Surfaces
+  --island-bg-color: #ffffff;
+  --island-bg-color-alt: #fff;
+  --color-surface-lowest: #ffffff;
+  --color-surface-low: #f8f9fa;
+  --color-surface-high: #e9ecef;
+  --color-surface-primary-container: #{$color-primary-light};
+  --color-on-surface: #{$color-gray-90};
+  --color-on-primary-container: #{$color-primary-darkest};
+
+  // Semantic
+  --color-success: #{$color-success};
+  --color-success-darker: #{$color-success-darker};
+  --color-success-darkest: #{$color-success-darkest};
+  --color-success-text: #{$color-success-text};
+  --color-success-contrast: #{$color-success-contrast};
+
+  --color-warning: #{$color-warning};
+  --color-warning-dark: #{$color-warning-dark};
+  --color-warning-darker: #{$color-warning-darker};
+
+  --color-danger: #{$color-danger};
+  --color-danger-dark: #{$color-danger-dark};
+  --color-danger-darker: #{$color-danger-darker};
+  --color-danger-text: #{$color-danger-text};
+  --color-danger-background: #{$color-danger-background};
+
+  --color-disabled: var(--color-gray-40);
+  --color-muted: var(--color-gray-50);
+  --color-muted-darker: var(--color-gray-60);
+
+  --color-selection: #6965db;
+  --color-icon-white: #fff;
+  --color-logo-icon: var(--color-primary);
+  --color-logo-text: #190064;
+
+  // Text
+  --text-primary-color: var(--color-on-surface);
+  --link-color: #1c7ed6;
+  --link-color-hover: #1971c2;
+
+  // Inputs
+  --input-bg-color: #fff;
+  --input-border-color: #{$color-gray-30};
+  --input-hover-bg-color: #{$color-gray-10};
+  --input-label-color: #{$color-gray-70};
+
+  // Borders
+  --default-border-color: var(--color-gray-30);
+  --dialog-border-color: var(--color-gray-20);
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.375rem;
+  --border-radius-lg: 0.5rem;
+  --border-radius-xl: 0.75rem;
+  --border-radius-full: 9999px;
+
+  // Shadows (Island Pattern)
+  --shadow-island: 0px 0px 1px 0px rgba(0, 0, 0, 0.17),
+    0px 0px 3px 0px rgba(0, 0, 0, 0.08), 
+    0px 7px 14px 0px rgba(0, 0, 0, 0.05);
+  
+  --shadow-island-stronger: 0px 0px 1px 0px rgba(0, 0, 0, 0.17),
+    0px 0px 3px 0px rgba(0, 0, 0, 0.08), 
+    0px 7px 14px 0px rgb(0 0 0 / 18%);
+  
+  --modal-shadow: 0px 100px 80px rgba(0, 0, 0, 0.07),
+    0px 41.7776px 33.4221px rgba(0, 0, 0, 0.0503198),
+    0px 22.3363px 17.869px rgba(0, 0, 0, 0.0417275),
+    0px 12.5216px 10.0172px rgba(0, 0, 0, 0.035),
+    0px 6.6501px 5.32008px rgba(0, 0, 0, 0.0282725),
+    0px 2.76726px 2.21381px rgba(0, 0, 0, 0.0196802);
+
+  // Spacing
+  --space-factor: 0.25rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  // Typography
+  --ui-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  // Sizing
+  --default-button-size: 2rem;
+  --default-icon-size: 1rem;
+  --lg-button-size: 2.25rem;
+  --lg-icon-size: 1rem;
+  --avatar-size: 2rem;
+  --sidebar-width: 260px;
+  --header-height: 64px;
+
+  // Timing
+  --duration-fast: 0.15s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.3s;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  // Scrollbar
+  --scrollbar-thumb: var(--color-gray-30);
+  --scrollbar-thumb-hover: var(--color-gray-40);
+}
+
+// Dark Mode
+@media (prefers-color-scheme: dark) {
+  :root {
+    // Grays (inverted)
+    --color-gray-10: #1a1a1a;
+    --color-gray-20: #2d2d2d;
+    --color-gray-30: #3d3d3d;
+    --color-gray-40: #5c5c5c;
+    --color-gray-50: #7a7a7a;
+    --color-gray-60: #999999;
+    --color-gray-70: #b8b8b8;
+    --color-gray-80: #d6d6d6;
+    --color-gray-85: #ebebeb;
+    --color-gray-90: #f5f5f5;
+    --color-gray-100: #ffffff;
+
+    --island-bg-color: #252525;
+    --island-bg-color-alt: #2d2d2d;
+    --color-surface-lowest: #121212;
+    --color-surface-low: #1a1a1a;
+    --color-surface-high: #2d2d2d;
+    --color-on-surface: #f5f5f5;
+    --color-on-primary-container: #e3e2fe;
+
+    --color-muted: var(--color-gray-50);
+    --color-muted-darker: var(--color-gray-60);
+
+    --input-bg-color: #2d2d2d;
+    --input-border-color: #3d3d3d;
+    --input-hover-bg-color: #363636;
+    --input-label-color: var(--color-gray-70);
+
+    --default-border-color: #3d3d3d;
+    --dialog-border-color: #2d2d2d;
+    --text-primary-color: #f5f5f5;
+
+    --link-color: #74c0fc;
+    --link-color-hover: #a5d8ff;
+
+    --scrollbar-thumb: var(--color-gray-40);
+    --scrollbar-thumb-hover: var(--color-gray-60);
+
+    // Shadows need less opacity in dark mode
+    --shadow-island: 0px 0px 1px 0px rgba(0, 0, 0, 0.4),
+      0px 0px 3px 0px rgba(0, 0, 0, 0.2),
+      0px 7px 14px 0px rgba(0, 0, 0, 0.15);
+
+    --shadow-island-stronger: 0px 0px 1px 0px rgba(0, 0, 0, 0.4),
+      0px 0px 3px 0px rgba(0, 0, 0, 0.2),
+      0px 7px 14px 0px rgba(0, 0, 0, 0.35);
+  }
+}
+
+// Manual dark mode override
+[data-theme="dark"] {
+  // Grays (inverted)
+  --color-gray-10: #1a1a1a;
+  --color-gray-20: #2d2d2d;
+  --color-gray-30: #3d3d3d;
+  --color-gray-40: #5c5c5c;
+  --color-gray-50: #7a7a7a;
+  --color-gray-60: #999999;
+  --color-gray-70: #b8b8b8;
+  --color-gray-80: #d6d6d6;
+  --color-gray-85: #ebebeb;
+  --color-gray-90: #f5f5f5;
+  --color-gray-100: #ffffff;
+
+  --island-bg-color: #252525;
+  --island-bg-color-alt: #2d2d2d;
+  --color-surface-lowest: #121212;
+  --color-surface-low: #1a1a1a;
+  --color-surface-high: #2d2d2d;
+  --color-on-surface: #f5f5f5;
+  --color-on-primary-container: #e3e2fe;
+
+  --color-muted: var(--color-gray-50);
+  --color-muted-darker: var(--color-gray-60);
+
+  --input-bg-color: #2d2d2d;
+  --input-border-color: #3d3d3d;
+  --input-hover-bg-color: #363636;
+  --input-label-color: var(--color-gray-70);
+
+  --default-border-color: #3d3d3d;
+  --dialog-border-color: #2d2d2d;
+  --text-primary-color: #f5f5f5;
+
+  --link-color: #74c0fc;
+  --link-color-hover: #a5d8ff;
+
+  --scrollbar-thumb: var(--color-gray-40);
+  --scrollbar-thumb-hover: var(--color-gray-60);
+
+  --shadow-island: 0px 0px 1px 0px rgba(0, 0, 0, 0.4),
+    0px 0px 3px 0px rgba(0, 0, 0, 0.2),
+    0px 7px 14px 0px rgba(0, 0, 0, 0.15);
+
+  --shadow-island-stronger: 0px 0px 1px 0px rgba(0, 0, 0, 0.4),
+    0px 0px 3px 0px rgba(0, 0, 0, 0.2),
+    0px 7px 14px 0px rgba(0, 0, 0, 0.35);
+}

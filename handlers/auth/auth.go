@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"excalidraw-complete/core"
+	"excalidraw-complete/workspace"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,6 +35,7 @@ var (
 	oidcOauthConfig *oauth2.Config
 	oidcProvider    *oidc.Provider
 	verifier        *oidc.IDTokenVerifier
+	workspaceStore  *workspace.Store
 )
 
 // AppClaims represents the custom claims for the JWT.
@@ -48,10 +50,15 @@ type AppClaims struct {
 // OIDCClaims represents the claims from OIDC token
 type OIDCClaims struct {
 	Email             string `json:"email"`
+	EmailVerified     bool   `json:"email_verified"`
 	Name              string `json:"name"`
 	PreferredUsername string `json:"preferred_username"`
 	Picture           string `json:"picture"`
 	Sub               string `json:"sub"`
+}
+
+func SetWorkspaceStore(store *workspace.Store) {
+	workspaceStore = store
 }
 
 func InitAuth() {
@@ -160,15 +167,18 @@ func Init() {
 	}
 }
 
-func generateStateOauthCookie(w http.ResponseWriter) string {
+func generateStateOauthCookie(w http.ResponseWriter, r *http.Request) string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	state := base64.URLEncoding.EncodeToString(b)
 	cookie := &http.Cookie{
 		Name:     "oauthstate",
 		Value:    state,
+		Path:     "/",
 		Expires:  time.Now().Add(10 * time.Minute),
 		HttpOnly: true,
+		Secure:   r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)
 	return state
@@ -179,7 +189,7 @@ func HandleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "GitHub OAuth is not configured", http.StatusInternalServerError)
 		return
 	}
-	state := generateStateOauthCookie(w)
+	state := generateStateOauthCookie(w, r)
 	url := githubOauthConfig.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
@@ -187,6 +197,11 @@ func HandleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	if githubOauthConfig.ClientID == "" {
 		http.Error(w, "GitHub OAuth is not configured", http.StatusInternalServerError)
+		return
+	}
+	if !validateStateCookie(r, "oauthstate") {
+		logrus.Warn("invalid github oauth state")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
@@ -216,12 +231,33 @@ func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	var githubUser struct {
 		ID        int64  `json:"id"`
 		Login     string `json:"login"`
+		Email     string `json:"email"`
 		AvatarURL string `json:"avatar_url"`
 		Name      string `json:"name"`
 	}
 
 	if err := json.Unmarshal(body, &githubUser); err != nil {
 		logrus.Errorf("failed to unmarshal github user: %s", err.Error())
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	if workspaceStore != nil {
+		_, session, sessionToken, err := workspaceStore.UpsertOAuthSession(r.Context(), workspace.OAuthProfile{
+			Provider:       "github",
+			ProviderUserID: fmt.Sprintf("%d", githubUser.ID),
+			Email:          githubUser.Email,
+			Name:           githubUser.Name,
+			Username:       githubUser.Login,
+			AvatarURL:      githubUser.AvatarURL,
+			EmailVerified:  githubUser.Email != "",
+		})
+		if err != nil {
+			logrus.Errorf("failed to create workspace oauth session: %s", err.Error())
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+		workspace.SetSessionCookie(w, r, sessionToken, session.ExpiresAt)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
@@ -280,6 +316,11 @@ func HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "OIDC is not configured", http.StatusInternalServerError)
 		return
 	}
+	if !validateStateCookie(r, "oidc_state") {
+		logrus.Warn("invalid oidc state")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
 
 	code := r.FormValue("code")
 	if code == "" {
@@ -330,6 +371,26 @@ func HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		user.Login = user.Email
 	}
 
+	if workspaceStore != nil {
+		_, session, sessionToken, err := workspaceStore.UpsertOAuthSession(r.Context(), workspace.OAuthProfile{
+			Provider:       "oidc",
+			ProviderUserID: claims.Sub,
+			Email:          claims.Email,
+			Name:           claims.Name,
+			Username:       user.Login,
+			AvatarURL:      claims.Picture,
+			EmailVerified:  claims.EmailVerified,
+		})
+		if err != nil {
+			logrus.Errorf("failed to create workspace oidc session: %s", err.Error())
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+		workspace.SetSessionCookie(w, r, sessionToken, session.ExpiresAt)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
 	jwtToken, err := createJWT(user)
 	if err != nil {
 		logrus.Errorf("failed to create JWT: %s", err.Error())
@@ -339,6 +400,18 @@ func HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Redirect to frontend with token
 	http.Redirect(w, r, fmt.Sprintf("/?token=%s", jwtToken), http.StatusTemporaryRedirect)
+}
+
+func validateStateCookie(r *http.Request, name string) bool {
+	state := r.FormValue("state")
+	if state == "" {
+		return false
+	}
+	cookie, err := r.Cookie(name)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+	return cookie.Value == state
 }
 
 func createJWT(user *core.User) (string, error) {

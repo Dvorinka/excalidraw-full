@@ -5,7 +5,7 @@ import (
 	"excalidraw-complete/stores/aws"
 	"excalidraw-complete/stores/filesystem"
 	"excalidraw-complete/stores/memory"
-	"excalidraw-complete/stores/sqlite"
+	"excalidraw-complete/stores/postgres"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -33,13 +33,13 @@ func GetStore() Store {
 		}
 		storageField["basePath"] = basePath
 		store = filesystem.NewStore(basePath)
-	case "sqlite":
-		dataSourceName := os.Getenv("DATA_SOURCE_NAME")
-		if dataSourceName == "" {
-			dataSourceName = "excalidraw.db" // Default filename
+	case "postgres", "":
+		databaseURL := os.Getenv("DATABASE_URL")
+		if databaseURL == "" {
+			logrus.Fatal("DATABASE_URL environment variable must be set for postgres storage")
 		}
-		storageField["dataSourceName"] = dataSourceName
-		store = sqlite.NewStore(dataSourceName)
+		storageField["databaseURL"] = "configured"
+		store = postgres.NewStore(databaseURL)
 	case "s3":
 		bucketName := os.Getenv("S3_BUCKET_NAME")
 		if bucketName == "" {

@@ -3,13 +3,13 @@ package main
 import (
 	"embed"
 	_ "embed"
-	"excalidraw-complete/handlers/api/documents"
 	"excalidraw-complete/handlers/api/firebase"
 	"excalidraw-complete/handlers/api/kv"
 	"excalidraw-complete/handlers/api/openai"
 	"excalidraw-complete/handlers/auth"
 	authMiddleware "excalidraw-complete/middleware"
 	"excalidraw-complete/stores"
+	"excalidraw-complete/workspace"
 	"flag"
 	"fmt"
 	"io"
@@ -125,12 +125,13 @@ func handleUI() http.HandlerFunc {
 	}
 }
 
-func setupRouter(store stores.Store) *chi.Mux {
+func setupRouter(store stores.Store, workspaceAPI *workspace.API) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(securityHeaders)
 
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedOrigins:   allowedOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "Content-Length", "X-CSRF-Token", "Token", "session", "Origin", "Host", "Connection", "Accept-Encoding", "Accept-Language", "X-Requested-With"},
 		AllowCredentials: true,
@@ -141,6 +142,10 @@ func setupRouter(store stores.Store) *chi.Mux {
 		r.Post("/documents:commit", firebase.HandleBatchCommit())
 		r.Post("/documents:batchGet", firebase.HandleBatchGet())
 	})
+
+	if workspaceAPI != nil {
+		r.Mount("/api", workspaceAPI.Routes())
+	}
 
 	r.Route("/api/v2", func(r chi.Router) {
 		// Route for canvases, protected by JWT auth
@@ -159,11 +164,8 @@ func setupRouter(store stores.Store) *chi.Mux {
 			})
 		})
 
-		// Old routes for anonymous document sharing
-		r.Post("/post/", documents.HandleCreate(store))
-		r.Route("/{id}", func(r chi.Router) {
-			r.Get("/", documents.HandleGet(store))
-		})
+		// Legacy anonymous document routes removed per project.md Phase 1.
+		// All persistence now goes through the workspace API with auth.
 	})
 
 	r.Route("/auth", func(r chi.Router) {
@@ -174,13 +176,55 @@ func setupRouter(store stores.Store) *chi.Mux {
 	return r
 }
 
+func allowedOrigins() []string {
+	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	if raw == "" {
+		return []string{
+			"http://localhost:3000",
+			"http://localhost:3002",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:3002",
+			"http://127.0.0.1:5173",
+		}
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' https://libraries.excalidraw.com ws: wss:; img-src 'self' data: blob: https://libraries.excalidraw.com; font-src 'self' data: https://fonts.gstatic.com https://unpkg.com; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'")
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func setupSocketIO() *socketio.Server {
 	opts := socketio.DefaultServerOptions()
 	opts.SetMaxHttpBufferSize(5000000)
 	opts.SetPath("/socket.io")
 	opts.SetAllowEIO3(true)
+	// Mirror HTTP CORS origin policy — wildcard + credentials is rejected by browsers.
+	socketOrigins := strings.Join(allowedOrigins(), ",")
+	if socketOrigins == "" {
+		socketOrigins = "http://localhost:3000,http://localhost:3002,http://localhost:5173"
+	}
 	opts.SetCors(&types.Cors{
-		Origin:      "*",
+		Origin:      socketOrigins,
 		Credentials: true,
 	})
 	ioo := socketio.NewServer(nil, opts)
@@ -190,7 +234,7 @@ func setupSocketIO() *socketio.Server {
 		me := socket.Id()
 		myRoom := socketio.Room(me)
 		ioo.To(myRoom).Emit("init-room")
-		utils.Log().Println("init room ", myRoom)
+		utils.Log().Printf("init room %v\n", myRoom)
 		socket.On("join-room", func(datas ...any) {
 			room := socketio.Room(datas[0].(string))
 			utils.Log().Printf("Socket %v has joined %v\n", me, room)
@@ -208,7 +252,7 @@ func setupSocketIO() *socketio.Server {
 				for _, user := range usersInRoom {
 					newRoomUsers = append(newRoomUsers, user.Id())
 				}
-				utils.Log().Println(" room ", room, " has users ", newRoomUsers)
+				utils.Log().Printf("room %v has users %v\n", room, newRoomUsers)
 				ioo.In(room).Emit(
 					"room-user-change",
 					newRoomUsers,
@@ -266,7 +310,7 @@ func setupSocketIO() *socketio.Server {
 
 func waitForShutdown(ioo *socketio.Server) {
 	exit := make(chan struct{})
-	SignalC := make(chan os.Signal)
+	SignalC := make(chan os.Signal, 1)
 
 	signal.Notify(SignalC, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
@@ -306,11 +350,56 @@ func main() {
 		FullTimestamp: true,
 	})
 
+	// Validate critical environment variables
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" || jwtSecret == "YOUR_SUPER_SECRET_RANDOM_STRING" || jwtSecret == "YOUR_SUPER_SECRET_RANDOM_STRING_MIN_32_CHARS" {
+		logrus.Fatal("JWT_SECRET must be set to a secure random string (min 32 chars). Generate with: openssl rand -base64 32")
+	}
+
+	storageType := os.Getenv("STORAGE_TYPE")
+	validStorageTypes := []string{"postgres", "memory", "filesystem", "kv", "s3", ""}
+	valid := false
+	for _, s := range validStorageTypes {
+		if storageType == s {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		logrus.Fatalf("STORAGE_TYPE must be one of: postgres, memory, filesystem, kv, s3. Got: %s", storageType)
+	}
+
+	if storageType == "" || storageType == "postgres" {
+		if os.Getenv("DATABASE_URL") == "" {
+			logrus.Fatal("DATABASE_URL must be set for PostgreSQL storage")
+		}
+	}
+
+	// Warn about incomplete OAuth/OIDC configuration
+	hasGitHubClient := os.Getenv("GITHUB_CLIENT_ID") != "" && os.Getenv("GITHUB_CLIENT_SECRET") != ""
+	hasOIDC := os.Getenv("OIDC_ISSUER_URL") != "" && os.Getenv("OIDC_CLIENT_ID") != "" && os.Getenv("OIDC_CLIENT_SECRET") != ""
+	if os.Getenv("GITHUB_CLIENT_ID") != "" && !hasGitHubClient {
+		logrus.Warn("GITHUB_CLIENT_ID is set but GITHUB_CLIENT_SECRET is missing — GitHub OAuth will not work")
+	}
+	if os.Getenv("OIDC_ISSUER_URL") != "" && !hasOIDC {
+		logrus.Warn("OIDC configuration is incomplete — OIDC SSO will not work")
+	}
+	if !hasGitHubClient && !hasOIDC {
+		logrus.Info("No external auth provider configured. Only password authentication is available.")
+	}
+
 	auth.InitAuth()
 	openai.Init()
 	store := stores.GetStore()
+	workspaceStore, err := workspace.NewStore(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to initialize workspace backend")
+	}
+	defer workspaceStore.Close()
+	auth.SetWorkspaceStore(workspaceStore)
+	workspaceAPI := workspace.NewAPI(workspaceStore)
 
-	r := setupRouter(store)
+	r := setupRouter(store, workspaceAPI)
 
 	ioo := setupSocketIO()
 	r.Mount("/socket.io/", ioo.ServeHandler(nil))

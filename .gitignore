@@ -1,14 +1,136 @@
+# ============================================
+# Excalidraw FULL - Git Ignore
+# ============================================
+
+# --------------------------------------------
+# Build Outputs
+# --------------------------------------------
 dist/
-frontend/
-!frontend/.keep
-excalidraw-complete
-*/node_modules
-*/dist
-node_modules
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# --------------------------------------------
+# Frontend (Node/Vite/React)
+# --------------------------------------------
+node_modules/
+*/node_modules/
+.pnpm-store/
+.yarn/cache
+.yarn/install-state.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp.js
+.vite/
+*.tsbuildinfo
+
+# Frontend build outputs (explicit)
+frontend/dist/
+frontend/build/
+frontend/out/
+
+# Cache & generated
+.parcel-cache/
+.eslintcache
+.stylelintcache
+*.local
+
+# --------------------------------------------
+# Go Backend
+# --------------------------------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# --------------------------------------------
+# Environment & Secrets
+# --------------------------------------------
 .env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
 *.env
-*/build/*
-*.db
-data/
-.idea
 .htpasswd
+secrets/
+*.pem
+*.key
+
+# --------------------------------------------
+# Database & Data
+# --------------------------------------------
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+*.log
+logs/
+
+# --------------------------------------------
+# IDE & Editors
+# --------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# --------------------------------------------
+# Testing & Coverage
+# --------------------------------------------
+coverage/
+.nyc_output/
+*.lcov
+*.cover
+*.cov
+coverage.txt
+coverage.html
+
+# --------------------------------------------
+# Misc
+# --------------------------------------------
+.cache/
+temp/
+tmp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.diff
+*.patch
+*.log
+.env*.backup
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# Binary output
+excalidraw-complete
+excalidraw-full
+excalidraw-full.exe
+excalidraw-complete.exe
+
+# cf-kv worker output
+cf-kv/index.js
+
+# Keep dist/.keep for empty directory tracking in git
+!frontend/dist/.keep

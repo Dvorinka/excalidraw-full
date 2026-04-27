@@ -1,0 +1,34 @@
+@use '../../styles/variables' as *;
+
+.card {
+  background: var(--island-bg-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-island);
+  overflow: hidden;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.hover {
+  cursor: pointer;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-island-stronger);
+  }
+}
+
+.header {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-gray-20);
+}
+
+.content {
+  padding: var(--space-4);
+}
+
+.footer {
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-gray-20);
+  background: var(--color-surface-low);
+}

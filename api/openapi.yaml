@@ -1,0 +1,695 @@
+openapi: 3.1.0
+info:
+  title: Excalidraw Full Workspace API
+  version: 0.1.0
+  description: Backend-owned workspace API for auth, teams, drawings, folders, projects, templates, revisions, and activity.
+servers:
+  - url: /api
+security:
+  - cookieSession: []
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: excalidraw_session
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    User:
+      type: object
+      required: [id, name, username, email, locale, timezone, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: string }
+        email: { type: string, format: email }
+        avatar_url: { type: [string, "null"] }
+        locale: { type: string }
+        timezone: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Session:
+      type: object
+      required: [id, user_id, expires_at, created_at]
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    Team:
+      type: object
+      required: [id, name, slug, owner_user_id, plan_type, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        owner_user_id: { type: string }
+        plan_type: { type: string, enum: [free, pro] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TeamMembership:
+      type: object
+      required: [id, team_id, user_id, role, joined_at]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        user_id: { type: string }
+        role: { type: string, enum: [owner, admin, editor, viewer] }
+        joined_at: { type: string, format: date-time }
+        user:
+          $ref: "#/components/schemas/User"
+    Drawing:
+      type: object
+      required: [id, team_id, title, owner_user_id, visibility, is_archived, created_at, updated_at]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        folder_id: { type: [string, "null"] }
+        project_id: { type: [string, "null"] }
+        slug: { type: [string, "null"] }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        owner_user_id: { type: string }
+        latest_revision_id: { type: [string, "null"] }
+        visibility: { type: string, enum: [private, team, restricted, public-link] }
+        is_archived: { type: boolean }
+        thumbnail_asset_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: [string, "null"], format: date-time }
+        owner:
+          $ref: "#/components/schemas/User"
+    DrawingRevision:
+      type: object
+      required: [id, drawing_id, revision_number, snapshot_path, snapshot_size, content_hash, created_by, created_at]
+      properties:
+        id: { type: string }
+        drawing_id: { type: string }
+        revision_number: { type: integer }
+        snapshot_path: { type: string }
+        snapshot_size: { type: integer, format: int64 }
+        content_hash: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        change_summary: { type: [string, "null"] }
+        snapshot: {}
+    Template:
+      type: object
+      required: [id, scope, type, name, snapshot_path, metadata_json, created_by, created_at, updated_at]
+      properties:
+        id: { type: string }
+        team_id: { type: [string, "null"] }
+        scope: { type: string, enum: [system, team, personal] }
+        type: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        snapshot_path: { type: string }
+        metadata_json: { type: object, additionalProperties: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ActivityEvent:
+      type: object
+      required: [id, resource_type, resource_id, event_type, metadata_json, created_at]
+      properties:
+        id: { type: string }
+        actor_user_id: { type: [string, "null"] }
+        team_id: { type: [string, "null"] }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        event_type: { type: string }
+        metadata_json: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        actor:
+          $ref: "#/components/schemas/User"
+    TeamInvite:
+      type: object
+      required: [id, team_id, email, role, invited_by, expires_at, created_at]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, editor, viewer] }
+        invited_by: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    PermissionGrant:
+      type: object
+      required: [id, resource_type, resource_id, subject_type, subject_id, permission, created_at]
+      properties:
+        id: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: string }
+        subject_type: { type: string, enum: [user, team, link] }
+        subject_id: { type: string }
+        permission: { type: string, enum: [view, comment, edit, manage, share, invite] }
+        inherited_from: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    ShareLink:
+      type: object
+      required: [id, resource_type, resource_id, permission, created_by, created_at]
+      properties:
+        id: { type: string }
+        resource_type: { type: string, enum: [drawing, folder, project] }
+        resource_id: { type: string }
+        permission: { type: string, enum: [view, comment, edit] }
+        expires_at: { type: [string, "null"], format: date-time }
+        created_by: { type: string }
+        revoked_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    DrawingAsset:
+      type: object
+      required: [id, drawing_id, kind, path, mime_type, size, uploaded_by, created_at]
+      properties:
+        id: { type: string }
+        drawing_id: { type: string }
+        kind: { type: string, enum: [image, export, attachment, thumbnail] }
+        path: { type: string }
+        mime_type: { type: string }
+        size: { type: integer, format: int64 }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
+        uploaded_by: { type: string }
+        created_at: { type: string, format: date-time }
+    Embed:
+      type: object
+      required: [id, drawing_id, source_url, canonical_url, provider, embed_type, created_by, created_at]
+      properties:
+        id: { type: string }
+        drawing_id: { type: string }
+        source_url: { type: string, format: uri }
+        canonical_url: { type: string, format: uri }
+        provider: { type: string }
+        embed_type: { type: string, enum: [link, iframe, provider] }
+        title: { type: [string, "null"] }
+        preview_asset_id: { type: [string, "null"] }
+        safe_embed_html: { type: [string, "null"] }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    LinkReference:
+      type: object
+      required: [id, source_resource_type, source_resource_id, target_resource_type, target_resource_id, created_by, created_at]
+      properties:
+        id: { type: string }
+        source_resource_type: { type: string }
+        source_resource_id: { type: string }
+        target_resource_type: { type: string, enum: [drawing, folder, project, embed] }
+        target_resource_id: { type: string }
+        label: { type: [string, "null"] }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    WorkspaceStats:
+      type: object
+      required: [teams, members, projects, folders, drawings, templates, revisions, assets, storage_bytes]
+      properties:
+        teams: { type: integer }
+        members: { type: integer }
+        projects: { type: integer }
+        folders: { type: integer }
+        drawings: { type: integer }
+        templates: { type: integer }
+        revisions: { type: integer }
+        assets: { type: integer }
+        storage_bytes: { type: integer, format: int64 }
+    Project:
+      type: object
+      required: [id, team_id, name, slug, created_by, created_at, updated_at]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: [string, "null"] }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Folder:
+      type: object
+      required: [id, team_id, name, slug, path_cache, visibility, created_by, created_at, updated_at]
+      properties:
+        id: { type: string }
+        team_id: { type: string }
+        project_id: { type: [string, "null"] }
+        parent_folder_id: { type: [string, "null"] }
+        name: { type: string }
+        slug: { type: string }
+        path_cache: { type: string }
+        visibility: { type: string, enum: [private, team] }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+paths:
+  /health:
+    get:
+      security: []
+      summary: Health check
+      responses:
+        "200":
+          description: Backend healthy
+        "503":
+          description: Backend unhealthy
+  /auth/signup:
+    post:
+      security: []
+      summary: Create password account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "201":
+          description: Signed up
+        "409":
+          description: Email already exists
+  /auth/login:
+    post:
+      security: []
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Logged in
+        "401":
+          description: Invalid credentials
+  /auth/logout:
+    post:
+      summary: Revoke current session
+      responses:
+        "200":
+          description: Logged out
+  /auth/me:
+    get:
+      summary: Current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /teams:
+    get:
+      summary: List accessible teams
+      responses:
+        "200":
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+    post:
+      summary: Create team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+      responses:
+        "201":
+          description: Created team
+  /teams/{teamID}/members:
+    get:
+      summary: List team members
+      parameters:
+        - in: path
+          name: teamID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamMembership"
+  /teams/{teamID}/invites:
+    get:
+      summary: List pending team invites
+      parameters:
+        - in: path
+          name: teamID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pending invites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamInvite"
+    post:
+      summary: Create team invite
+      parameters:
+        - in: path
+          name: teamID
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email }
+                role: { type: string, enum: [admin, editor, viewer] }
+      responses:
+        "201":
+          description: Invite and one-time token
+  /invites/accept:
+    post:
+      summary: Accept invite token as current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200":
+          description: Accepted membership
+  /drawings:
+    get:
+      summary: List drawings visible to current user
+      parameters:
+        - in: query
+          name: team_id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Drawings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Drawing"
+    post:
+      summary: Create drawing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                team_id: { type: [string, "null"] }
+                folder_id: { type: [string, "null"] }
+                project_id: { type: [string, "null"] }
+                title: { type: string }
+                description: { type: [string, "null"] }
+                visibility: { type: string }
+                snapshot: {}
+      responses:
+        "201":
+          description: Created drawing
+  /drawings/{drawingID}:
+    get:
+      summary: Get drawing metadata
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Drawing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Drawing"
+    patch:
+      summary: Update drawing metadata
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated drawing
+    delete:
+      summary: Archive drawing
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Archived
+  /drawings/{drawingID}/revisions:
+    get:
+      summary: List drawing revisions
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Revisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DrawingRevision"
+    post:
+      summary: Create immutable drawing revision
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Revision created
+  /drawings/{drawingID}/permissions:
+    get:
+      summary: List explicit drawing permissions
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Permission grants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PermissionGrant"
+    post:
+      summary: Grant explicit drawing permission
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created permission grant
+  /drawings/{drawingID}/share-links:
+    get:
+      summary: List active drawing share links
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Share links without token hashes
+    post:
+      summary: Create drawing share link
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created share link and one-time token
+  /shared/{token}:
+    get:
+      security: []
+      summary: Resolve public share token
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Shared resource payload
+  /drawings/{drawingID}/assets:
+    get:
+      summary: List drawing asset metadata
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assets
+    post:
+      summary: Create drawing asset metadata
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created asset metadata
+  /drawings/{drawingID}/embeds:
+    get:
+      summary: List drawing embeds
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Embeds
+    post:
+      summary: Create safe drawing embed metadata
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created embed metadata
+  /drawings/{drawingID}/links:
+    get:
+      summary: List drawing link references
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Link references
+    post:
+      summary: Create drawing link reference
+      parameters:
+        - in: path
+          name: drawingID
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Created link reference
+  /templates:
+    get:
+      summary: List system and accessible team templates
+      parameters:
+        - in: query
+          name: team_id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+  /activity:
+    get:
+      summary: List recent activity for accessible teams
+      parameters:
+        - in: query
+          name: team_id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+  /stats:
+    get:
+      summary: Workspace counts and storage usage
+      parameters:
+        - in: query
+          name: team_id
+          schema: { type: string }
+      responses:
+        "200":
+          description: Workspace stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceStats"
+  /folders:
+    get:
+      summary: List folders
+      responses:
+        "200":
+          description: Folders
+    post:
+      summary: Create folder
+      responses:
+        "201":
+          description: Created folder
+  /projects:
+    get:
+      summary: List projects
+      responses:
+        "200":
+          description: Projects
+    post:
+      summary: Create project
+      responses:
+        "201":
+          description: Created project
