@@ -41,7 +41,7 @@ The application will be available at `http://localhost:3002`.
 
 ## Requirements
 
-- Go 1.25+
+- Go 1.26.2+
 - Node.js 20+ (for frontend build)
 - Make (optional, for convenience commands)
 - Docker (optional, for containerized deployment)
@@ -69,7 +69,7 @@ All configuration is via environment variables. See `.env.example` for the full 
 
 ## Architecture
 
-- **Backend**: Go 1.25, Chi router, PostgreSQL (pgx)
+- **Backend**: Go 1.26.2, Chi router, PostgreSQL (pgx)
 - **Frontend**: React 18, Vite, TypeScript, Zustand, react-router-dom, react-i18next
 - **Real-time**: Socket.IO for collaborative canvas sync
 - **Auth**: Session cookies (httpOnly, SameSite=Lax) + bcrypt password hashing + OAuth/OIDC

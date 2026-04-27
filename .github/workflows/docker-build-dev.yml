@@ -13,6 +13,22 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: excalidraw
+          POSTGRES_PASSWORD: excalidraw
+          POSTGRES_DB: excalidraw_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U excalidraw -d excalidraw_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://excalidraw:excalidraw@localhost:5432/excalidraw_test?sslmode=disable
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,7 +38,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: go.mod
 
       - name: Run Go tests
         run: go test ./... -v -count=1
@@ -39,6 +55,9 @@ jobs:
 
       - name: Build frontend
         run: cd frontend && npm run build
+
+      - name: Typecheck frontend
+        run: cd frontend && npm run typecheck
 
       - name: Run frontend tests
         run: cd frontend && npm test -- --run
@@ -57,6 +76,7 @@ jobs:
           submodules: true
 
       - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -81,7 +101,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build Docker image
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./excalidraw-full.Dockerfile
+          push: false
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+
       - name: Build and push Docker image
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .

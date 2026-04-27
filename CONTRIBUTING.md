@@ -4,7 +4,7 @@
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.26.2+
 - Node.js 20+
 - npm or pnpm
 - Docker (optional, for containerized builds)

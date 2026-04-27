@@ -22,7 +22,7 @@ RUN npm run build
 # -------------------------------------------------------------------
 # Stage 2: Backend build
 # -------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine AS backend-builder
 RUN apk add --no-cache git ca-certificates
 WORKDIR /app
 COPY go.mod go.sum ./
