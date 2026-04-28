@@ -39,6 +39,18 @@ make docker-up # Or run via Docker Compose
 
 The application will be available at `http://localhost:3002`.
 
+## Docker Images
+
+Pushing to GitHub automatically builds and publishes the production image to GitHub Container Registry:
+
+```bash
+ghcr.io/<owner>/<repo>:latest
+ghcr.io/<owner>/<repo>:sha-<commit>
+ghcr.io/<owner>/<repo>:<branch>
+```
+
+No registry secrets are required. The workflow uses GitHub's built-in `GITHUB_TOKEN`.
+
 ## Requirements
 
 - Go 1.26.2+
