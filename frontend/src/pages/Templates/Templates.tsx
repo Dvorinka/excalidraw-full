@@ -36,7 +36,7 @@ export const Templates: React.FC = () => {
     try {
       const t = await api.templates.create({ name: name.trim(), type: 'empty', scope: 'personal' });
       setTemplates([t, ...templates]); setShowModal(false); setName('');
-    } catch (err) { setError('Create failed'); }
+    } catch { setError('Create failed'); }
     finally { setCreating(false); }
   };
 

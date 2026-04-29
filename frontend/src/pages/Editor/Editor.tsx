@@ -12,45 +12,40 @@ import styles from './Editor.module.scss';
 // Dynamic import for Excalidraw to avoid SSR issues
 const Excalidraw = React.lazy(() => import('@excalidraw/excalidraw').then(mod => ({ default: mod.Excalidraw })));
 
-interface ExcalidrawElement {
-  id: string;
-  type: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  [key: string]: unknown;
-}
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/types/element/types';
+import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types/types';
 
-interface ExcalidrawState {
+type LooseElement = Record<string, unknown>;
+
+interface EditorState {
   elements: ExcalidrawElement[];
   appState: Record<string, unknown>;
   files: Record<string, { dataURL: string; mimeType: string }>;
 }
 
-function prepareElementsForImport(sourceElements: any[], offsetX: number, offsetY: number): any[] {
+function prepareElementsForImport(sourceElements: LooseElement[], offsetX: number, offsetY: number): LooseElement[] {
   if (!sourceElements || !sourceElements.length) return [];
   const idMap = new Map<string, string>();
-  sourceElements.forEach((el: any) => {
-    idMap.set(el.id, `${el.type}-${Math.random().toString(36).slice(2, 9)}`);
+  sourceElements.forEach((el) => {
+    idMap.set(el.id as string, `${el.type}-${Math.random().toString(36).slice(2, 9)}`);
   });
-  return sourceElements.map((el: any) => {
-    const newEl = { ...el };
-    newEl.id = idMap.get(el.id) || el.id;
-    newEl.x = (el.x || 0) + offsetX;
-    newEl.y = (el.y || 0) + offsetY;
-    newEl.version = (el.version || 1) + 1;
+  return sourceElements.map((el) => {
+    const newEl: LooseElement = { ...el };
+    newEl.id = idMap.get(el.id as string) || el.id;
+    newEl.x = ((el.x as number) || 0) + offsetX;
+    newEl.y = ((el.y as number) || 0) + offsetY;
+    newEl.version = ((el.version as number) || 1) + 1;
     newEl.versionNonce = Math.floor(Math.random() * 1000000);
     newEl.updated = Date.now();
     newEl.seed = Math.floor(Math.random() * 100000);
     if (newEl.boundElements) {
-      newEl.boundElements = newEl.boundElements.map((be: any) => ({
+      newEl.boundElements = (newEl.boundElements as LooseElement[]).map((be) => ({
         ...be,
-        id: idMap.get(be.id) || be.id,
+        id: idMap.get(be.id as string) || be.id,
       }));
     }
-    if (newEl.containerId && idMap.has(newEl.containerId)) {
-      newEl.containerId = idMap.get(newEl.containerId);
+    if (newEl.containerId && idMap.has(newEl.containerId as string)) {
+      newEl.containerId = idMap.get(newEl.containerId as string);
     }
     return newEl;
   });
@@ -71,7 +66,7 @@ export const Editor: React.FC = () => {
   const navigate = useNavigate();
   const [drawing, setDrawing] = useState<Drawing | null>(null);
   const [revisions, setRevisions] = useState<DrawingRevision[]>([]);
-  const [initialData, setInitialData] = useState<any>(null);
+  const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
@@ -81,11 +76,11 @@ export const Editor: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [selectedRevision, setSelectedRevision] = useState<string | null>(null);
   const { theme: appTheme } = useThemeStore();
-  const currentStateRef = useRef<ExcalidrawState | null>(null);
+  const currentStateRef = useRef<EditorState | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDataRef = useRef<string>('');
   const lastToggledCheckboxRef = useRef<string | null>(null);
-  const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
+  const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
 
   const [showTemplates, setShowTemplates] = useState(false);
 
@@ -144,13 +139,13 @@ export const Editor: React.FC = () => {
   }, [id]);
 
   // Handle changes from Excalidraw
-  const handleExcalidrawChange = useCallback((elements: readonly unknown[], appState: Record<string, unknown>, files: Record<string, { dataURL: string; mimeType: string }>) => {
+  const handleExcalidrawChange = useCallback((elements: readonly ExcalidrawElement[], appState: Record<string, unknown>, files: Record<string, { dataURL: string; mimeType: string }>) => {
     const selectedIds = Object.keys((appState.selectedElementIds as Record<string, boolean> | undefined) || {});
     const selectedCheckbox = selectedIds.length === 1
-      ? (elements as any[]).find((el) => (
+      ? elements.find((el) => (
           el.id === selectedIds[0] &&
           !el.isDeleted &&
-          el.customData?.templateRole === 'checkbox'
+          (el.customData as Record<string, unknown> | undefined)?.templateRole === 'checkbox'
         ))
       : null;
 
@@ -158,23 +153,23 @@ export const Editor: React.FC = () => {
       lastToggledCheckboxRef.current = null;
     } else if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedCheckbox.id) {
       lastToggledCheckboxRef.current = selectedCheckbox.id;
-      const nextChecked = !selectedCheckbox.customData?.checked;
-      const nextElements = (elements as any[]).map((el) => (
+      const nextChecked = !((selectedCheckbox.customData as Record<string, unknown> | undefined)?.checked as boolean);
+      const nextElements = elements.map((el) => (
         el.id === selectedCheckbox.id
           ? {
               ...el,
               backgroundColor: nextChecked ? '#a5eba8' : 'transparent',
               customData: {
-                ...(el.customData || {}),
+                ...((el.customData as Record<string, unknown> | undefined) || {}),
                 checked: nextChecked,
               },
-              version: (el.version || 1) + 1,
+              version: el.version + 1,
               versionNonce: Math.floor(Math.random() * 1000000),
               updated: Date.now(),
             }
           : el
       ));
-      excalidrawAPI.updateScene({ elements: nextElements });
+      excalidrawAPI.updateScene({ elements: nextElements as ExcalidrawElement[] });
       currentStateRef.current = {
         elements: nextElements,
         appState: appStateWithoutGrid(appState),
@@ -185,7 +180,7 @@ export const Editor: React.FC = () => {
     }
 
     currentStateRef.current = {
-      elements: elements as ExcalidrawElement[],
+      elements: elements as unknown as ExcalidrawElement[],
       appState: appStateWithoutGrid(appState),
       files,
     };
@@ -286,14 +281,14 @@ export const Editor: React.FC = () => {
     if (!templateElements || !excalidrawAPI) return;
     const currentElements = excalidrawAPI.getSceneElements?.() || [];
     let offsetX = 100;
-    let offsetY = 100;
+    const offsetY = 100;
     if (currentElements.length > 0) {
-      const maxX = Math.max(...currentElements.map((el: any) => (el.x || 0) + (el.width || 0)));
+      const maxX = Math.max(...currentElements.map((el) => (el.x + el.width)));
       offsetX = maxX + 100;
     }
     const newElements = prepareElementsForImport(templateElements, offsetX, offsetY);
     const mergedElements = [...currentElements, ...newElements];
-    excalidrawAPI.updateScene({ elements: mergedElements });
+    excalidrawAPI.updateScene({ elements: mergedElements as ExcalidrawElement[] });
     setShowTemplates(false);
     setSaveStatus('unsaved');
   };
@@ -407,7 +402,7 @@ export const Editor: React.FC = () => {
           {initialData && (
             <React.Suspense fallback={<div className={styles.loadingCanvas}>{t('editor.loadingCanvas')}</div>}>
               <Excalidraw
-                excalidrawAPI={(api: any) => setExcalidrawAPI(api)}
+                excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
                 initialData={initialData}
                 onChange={handleExcalidrawChange}
                 theme={appTheme === 'dark' ? 'dark' : 'light'}

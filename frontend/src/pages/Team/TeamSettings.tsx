@@ -70,8 +70,9 @@ export const TeamSettings: React.FC = () => {
       setNewEmail('');
       setNewPassword('');
       setNewRole('editor');
-    } catch (err: any) {
-      setError(err?.message || 'Failed to create user');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create user';
+      setError(message);
     } finally {
       setSending(false);
     }

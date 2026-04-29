@@ -32,7 +32,11 @@ export const Modal: React.FC<ModalProps> = ({
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onCancel?.() ?? onClose?.();
+        if (onCancel) {
+          onCancel();
+        } else {
+          onClose?.();
+        }
       }
     };
     if (isOpen) {

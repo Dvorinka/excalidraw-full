@@ -273,7 +273,12 @@ export const FileBrowser: React.FC = () => {
           <select
             className={styles.filterSelect}
             value={visibilityFilter}
-            onChange={(e) => setVisibilityFilter(e.target.value as any)}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === 'all' || v === 'private' || v === 'team' || v === 'public-link') {
+                setVisibilityFilter(v);
+              }
+            }}
             aria-label="Filter by visibility"
             title="Filter by visibility"
           >
@@ -287,8 +292,12 @@ export const FileBrowser: React.FC = () => {
             value={`${sortBy}-${sortOrder}`}
             onChange={(e) => {
               const [sb, so] = e.target.value.split('-');
-              setSortBy(sb as any);
-              setSortOrder(so as any);
+              if (sb === 'name' || sb === 'updated' || sb === 'created') {
+                setSortBy(sb);
+              }
+              if (so === 'asc' || so === 'desc') {
+                setSortOrder(so);
+              }
             }}
             aria-label="Sort drawings"
             title="Sort drawings"

@@ -11,12 +11,14 @@ interface TemplatePickerProps {
   onSelect: (template: PickedTemplate) => void;
 }
 
+type RawElement = Record<string, unknown>;
+
 interface TemplateOption {
   id: PickedTemplate;
   label: string;
   description: string;
   icon: React.ElementType;
-  elements: any[];
+  elements: RawElement[];
 }
 
 function makeHandDrawnRect(x: number, y: number, w: number, h: number, text?: string) {
@@ -84,15 +86,16 @@ function makeText(x: number, y: number, text: string, fontSize = 20) {
 
 function makeCheckbox(x: number, y: number, checked = false) {
   const box = makeHandDrawnRect(x, y, 20, 20);
-  (box as any).backgroundColor = checked ? '#a5eba8' : 'transparent';
-  (box as any).customData = {
-    templateRole: 'checkbox',
-    checked,
-  };
-  return box;
+  return Object.assign(box, {
+    backgroundColor: checked ? '#a5eba8' : 'transparent',
+    customData: {
+      templateRole: 'checkbox',
+      checked,
+    },
+  });
 }
 
-export const BUILTIN_TEMPLATES: Record<PickedTemplate, any[]> = {
+export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
   blank: [],
   todo: [
     makeHandDrawnRect(50, 50, 500, 50),

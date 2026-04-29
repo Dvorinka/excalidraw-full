@@ -5,7 +5,6 @@ import { Search, Bell, Plus, FileText, Loader2, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components';
 import { useThemeStore } from '@/stores';
 import { api } from '@/services';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { Drawing } from '@/types';
 import styles from './Layout.module.scss';
 
