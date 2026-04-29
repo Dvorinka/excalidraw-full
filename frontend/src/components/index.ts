@@ -4,7 +4,6 @@ export { Input } from './Input/Input';
 export { AppLayout } from './Layout/AppLayout';
 export { CommandPalette } from './CommandPalette/CommandPalette';
 export { TemplatePicker } from './TemplatePicker/TemplatePicker';
-export { ChatPanel } from './ChatPanel/ChatPanel';
 export { Header } from './Layout/Header';
 export { Sidebar } from './Layout/Sidebar';
 export { Modal } from './Modal/Modal';

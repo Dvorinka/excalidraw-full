@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Folder, ChevronRight, Grid, List, MoreVertical, Plus, Loader2 } from 'lucide-react';
+import { Folder, ChevronRight, Grid, List, MoreVertical, Plus, Loader2, AlertCircle } from 'lucide-react';
 import { Card, Button, Modal } from '@/components';
 import { useDrawingStore } from '@/stores';
 import { api } from '@/services';
@@ -28,6 +28,7 @@ export const FileBrowser: React.FC = () => {
   // New project (folder) state
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [projectError, setProjectError] = useState('');
 
   // Rename state
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -142,14 +143,16 @@ export const FileBrowser: React.FC = () => {
   const handleCreateFolder = async () => {
     const name = newProjectName.trim();
     if (!name) return;
+    setProjectError('');
     try {
-      const newFolder = await api.folders.create({ name });
+      const newFolder = await api.folders.create({ name, visibility: 'team' });
       setFolders([...folders, newFolder]);
       setShowNewProject(false);
       setNewProjectName('');
       navigate(`/files/folder/${newFolder.id}`);
     } catch (err) {
       console.error('Failed to create project:', err);
+      setProjectError('We could not create that project. Check the name and try again.');
       showModal('alert', 'Error', 'Failed to create project. Please try again.');
     }
   };
@@ -244,6 +247,7 @@ export const FileBrowser: React.FC = () => {
         message={modal.message}
         onConfirm={modal.onConfirm}
         onCancel={modal.onCancel}
+        onClose={() => setModal(m => ({ ...m, open: false }))}
         confirmText={modal.type === 'confirm' ? 'Delete' : 'OK'}
       />
       <div className={styles.container} role="region" aria-label={t('fileBrowser.title')}>
@@ -316,7 +320,7 @@ export const FileBrowser: React.FC = () => {
             <Plus size={16} />
             New Drawing
           </Button>
-          <Button variant="secondary" onClick={() => { setShowNewProject(true); setNewProjectName(''); }} aria-label="Create new project">
+          <Button variant="secondary" onClick={() => { setShowNewProject(true); setNewProjectName(''); setProjectError(''); }} aria-label="Create new project">
             <Folder size={16} />
             New Project
           </Button>
@@ -335,12 +339,18 @@ export const FileBrowser: React.FC = () => {
                 onChange={(e) => setNewProjectName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCreateFolder();
-                  if (e.key === 'Escape') { setShowNewProject(false); setNewProjectName(''); }
+                  if (e.key === 'Escape') { setShowNewProject(false); setNewProjectName(''); setProjectError(''); }
                 }}
                 className={styles.newProjectInput}
               />
               <button className={styles.newProjectBtn} onClick={handleCreateFolder}>Create</button>
-              <button className={styles.newProjectBtnCancel} onClick={() => { setShowNewProject(false); setNewProjectName(''); }}>Cancel</button>
+              <button className={styles.newProjectBtnCancel} onClick={() => { setShowNewProject(false); setNewProjectName(''); setProjectError(''); }}>Cancel</button>
+              {projectError && (
+                <div className={styles.inlineError} role="alert">
+                  <AlertCircle size={14} />
+                  {projectError}
+                </div>
+              )}
             </div>
           )}
           <ul className={styles.folderTree} role="tree">

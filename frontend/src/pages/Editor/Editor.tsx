@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Save, Check, Loader2, History, ChevronRight, Bot, StickyNote, LayoutTemplate, BookOpen, Search } from 'lucide-react';
-import { Button, ChatPanel } from '@/components';
+import { ArrowLeft, Save, Check, Loader2, History, ChevronRight, StickyNote, LayoutTemplate } from 'lucide-react';
+import { Button } from '@/components';
 import { BUILTIN_TEMPLATES } from '@/components/TemplatePicker/TemplatePicker';
 import { useThemeStore } from '@/stores';
 import { api } from '@/services';
@@ -56,6 +56,15 @@ function prepareElementsForImport(sourceElements: any[], offsetX: number, offset
   });
 }
 
+function appStateWithoutGrid(appState: Record<string, unknown> = {}) {
+  return {
+    ...appState,
+    gridModeEnabled: false,
+    gridSize: null,
+    gridStep: null,
+  };
+}
+
 export const Editor: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -68,7 +77,6 @@ export const Editor: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const [error, setError] = useState<string | null>(null);
   const [showRevisions, setShowRevisions] = useState(false);
-  const [showChat, setShowChat] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
   const [selectedRevision, setSelectedRevision] = useState<string | null>(null);
@@ -76,16 +84,10 @@ export const Editor: React.FC = () => {
   const currentStateRef = useRef<ExcalidrawState | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDataRef = useRef<string>('');
+  const lastToggledCheckboxRef = useRef<string | null>(null);
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
 
   const [showTemplates, setShowTemplates] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
-  const [libraryItems, setLibraryItems] = useState<any[]>([]);
-  const [libraryFiltered, setLibraryFiltered] = useState<any[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [libraryError, setLibraryError] = useState('');
-  const [librarySearch, setLibrarySearch] = useState('');
-  const [libraryCategory, setLibraryCategory] = useState('All');
 
   // Load drawing data
   useEffect(() => {
@@ -105,7 +107,7 @@ export const Editor: React.FC = () => {
           const snapshot = JSON.parse(String(revisionsData[0].snapshot));
           setInitialData({
             elements: snapshot.elements || [],
-            appState: snapshot.appState || {},
+            appState: appStateWithoutGrid(snapshot.appState || {}),
             files: snapshot.files || {},
           });
           lastSavedDataRef.current = JSON.stringify(snapshot);
@@ -116,7 +118,7 @@ export const Editor: React.FC = () => {
             const tpl = JSON.parse(pendingTemplate);
             setInitialData({
               elements: tpl.elements || [],
-              appState: tpl.appState || {},
+              appState: appStateWithoutGrid(tpl.appState || {}),
               files: tpl.files || {},
             });
             lastSavedDataRef.current = JSON.stringify(tpl);
@@ -125,7 +127,7 @@ export const Editor: React.FC = () => {
             // Start with empty canvas
             setInitialData({
               elements: [],
-              appState: {},
+              appState: appStateWithoutGrid(),
               files: {},
             });
             lastSavedDataRef.current = JSON.stringify({ elements: [], appState: {}, files: {} });
@@ -143,9 +145,48 @@ export const Editor: React.FC = () => {
 
   // Handle changes from Excalidraw
   const handleExcalidrawChange = useCallback((elements: readonly unknown[], appState: Record<string, unknown>, files: Record<string, { dataURL: string; mimeType: string }>) => {
+    const selectedIds = Object.keys((appState.selectedElementIds as Record<string, boolean> | undefined) || {});
+    const selectedCheckbox = selectedIds.length === 1
+      ? (elements as any[]).find((el) => (
+          el.id === selectedIds[0] &&
+          !el.isDeleted &&
+          el.customData?.templateRole === 'checkbox'
+        ))
+      : null;
+
+    if (!selectedCheckbox) {
+      lastToggledCheckboxRef.current = null;
+    } else if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedCheckbox.id) {
+      lastToggledCheckboxRef.current = selectedCheckbox.id;
+      const nextChecked = !selectedCheckbox.customData?.checked;
+      const nextElements = (elements as any[]).map((el) => (
+        el.id === selectedCheckbox.id
+          ? {
+              ...el,
+              backgroundColor: nextChecked ? '#a5eba8' : 'transparent',
+              customData: {
+                ...(el.customData || {}),
+                checked: nextChecked,
+              },
+              version: (el.version || 1) + 1,
+              versionNonce: Math.floor(Math.random() * 1000000),
+              updated: Date.now(),
+            }
+          : el
+      ));
+      excalidrawAPI.updateScene({ elements: nextElements });
+      currentStateRef.current = {
+        elements: nextElements,
+        appState: appStateWithoutGrid(appState),
+        files,
+      };
+      setSaveStatus('unsaved');
+      return;
+    }
+
     currentStateRef.current = {
       elements: elements as ExcalidrawElement[],
-      appState,
+      appState: appStateWithoutGrid(appState),
       files,
     };
     setSaveStatus('unsaved');
@@ -155,7 +196,7 @@ export const Editor: React.FC = () => {
     saveTimeoutRef.current = setTimeout(() => {
       saveDrawing();
     }, 2000);
-  }, []);
+  }, [excalidrawAPI]);
 
   // Auto-save functionality
   const saveDrawing = useCallback(async () => {
@@ -212,7 +253,7 @@ export const Editor: React.FC = () => {
       const snapshot = JSON.parse(String(revision.snapshot));
       setInitialData({
         elements: snapshot.elements || [],
-        appState: snapshot.appState || {},
+        appState: appStateWithoutGrid(snapshot.appState || {}),
         files: snapshot.files || {},
       });
       lastSavedDataRef.current = JSON.stringify(snapshot);
@@ -240,56 +281,6 @@ export const Editor: React.FC = () => {
     };
   }, []);
 
-  // Load library marketplace when panel opens
-  useEffect(() => {
-    if (!showLibrary || libraryItems.length > 0) return;
-    const load = async () => {
-      setLibraryLoading(true);
-      try {
-        const res = await fetch('https://libraries.excalidraw.com/libraries.json', {
-          headers: { Accept: 'application/json' },
-        });
-        if (!res.ok) throw new Error('Failed to load libraries');
-        const data = await res.json();
-        const items = Object.entries(data).map(([key, lib]: [string, any]) => ({
-          key,
-          name: lib.name || key,
-          description: lib.description || '',
-          authors: lib.authors || [{ name: 'Unknown' }],
-          source: `https://libraries.excalidraw.com/${key}.excalidrawlib`,
-          preview: lib.preview?.startsWith('http') ? lib.preview : `https://libraries.excalidraw.com/${key}.png`,
-          tags: lib.tags || [],
-          downloads: lib.downloads || 0,
-        }));
-        setLibraryItems(items);
-        setLibraryFiltered(items);
-      } catch (err) {
-        console.error(err);
-        setLibraryError('Could not load library marketplace.');
-      } finally {
-        setLibraryLoading(false);
-      }
-    };
-    load();
-  }, [showLibrary, libraryItems.length]);
-
-  // Filter library items
-  useEffect(() => {
-    let result = libraryItems;
-    if (librarySearch.trim()) {
-      const q = librarySearch.toLowerCase();
-      result = result.filter((l: any) =>
-        l.name.toLowerCase().includes(q) ||
-        l.description.toLowerCase().includes(q) ||
-        l.tags.some((t: string) => t.toLowerCase().includes(q))
-      );
-    }
-    if (libraryCategory !== 'All') {
-      result = result.filter((l: any) => l.tags.some((t: string) => t.toLowerCase() === libraryCategory.toLowerCase()));
-    }
-    setLibraryFiltered(result);
-  }, [librarySearch, libraryCategory, libraryItems]);
-
   const handleLoadTemplate = (templateKey: string) => {
     const templateElements = BUILTIN_TEMPLATES[templateKey as keyof typeof BUILTIN_TEMPLATES];
     if (!templateElements || !excalidrawAPI) return;
@@ -307,51 +298,29 @@ export const Editor: React.FC = () => {
     setSaveStatus('unsaved');
   };
 
-  const handleLoadLibraryItem = async (item: any) => {
-    if (!excalidrawAPI || !item.source) return;
-    try {
-      const res = await fetch(item.source);
-      if (!res.ok) throw new Error('Failed to load library');
-      const libData = await res.json();
-      let sourceElements: any[] = [];
-      if (libData.libraryItems && Array.isArray(libData.libraryItems)) {
-        sourceElements = libData.libraryItems[0]?.elements || [];
-      } else if (Array.isArray(libData)) {
-        sourceElements = libData;
-      } else if (libData.elements && Array.isArray(libData.elements)) {
-        sourceElements = libData.elements;
-      }
-      if (!sourceElements.length) {
-        alert('This library appears to be empty');
-        return;
-      }
-      const currentElements = excalidrawAPI.getSceneElements?.() || [];
-      let offsetX = 100;
-      let offsetY = 100;
-      if (currentElements.length > 0) {
-        const maxX = Math.max(...currentElements.map((el: any) => (el.x || 0) + (el.width || 0)));
-        offsetX = maxX + 100;
-      }
-      const newElements = prepareElementsForImport(sourceElements, offsetX, offsetY);
-      const mergedElements = [...currentElements, ...newElements];
-      excalidrawAPI.updateScene({ elements: mergedElements });
-      setShowLibrary(false);
-      setSaveStatus('unsaved');
-    } catch (err) {
-      console.error('Failed to load library item:', err);
-      alert('Failed to load library item');
-    }
-  };
-
   const templateOptions = [
     { id: 'blank', label: 'Blank', description: 'Empty canvas start', icon: null },
     { id: 'todo', label: 'To-Do List', description: 'Checkbox tasks', icon: null },
     { id: 'checklist', label: 'Checklist', description: 'Status checklist', icon: null },
     { id: 'list', label: 'Bullet List', description: 'Bulleted notes', icon: null },
     { id: 'flow', label: 'Flow Chart', description: 'Process diagram', icon: null },
+    { id: 'kanban', label: 'Kanban Board', description: 'Backlog, doing, done columns', icon: null },
+    { id: 'meeting', label: 'Meeting Notes', description: 'Agenda, decisions, actions', icon: null },
+    { id: 'wireframe', label: 'Wireframe', description: 'Editable page layout', icon: null },
+    { id: 'mindmap', label: 'Mind Map', description: 'Central idea with branches', icon: null },
   ];
 
-  const libraryCategories = ['All', 'Arrows', 'Charts', 'Cloud', 'Devops', 'Diagrams', 'Education', 'Food', 'Frames', 'Gaming', 'Icons', 'Illustrations', 'Machines', 'Misc', 'People', 'Software', 'Systems', 'Tech', 'Workflow'];
+  useEffect(() => {
+    if (!excalidrawAPI?.onPointerUp) return undefined;
+
+    return excalidrawAPI.onPointerUp((activeTool: { type?: string; locked?: boolean }) => {
+      if ((activeTool.type === 'line' || activeTool.type === 'arrow') && !activeTool.locked) {
+        window.setTimeout(() => {
+          excalidrawAPI.setActiveTool?.({ type: 'selection' });
+        }, 0);
+      }
+    });
+  }, [excalidrawAPI]);
 
   if (isLoading) {
     return (
@@ -394,16 +363,6 @@ export const Editor: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowChat(!showChat)}
-            title="AI Assistant"
-            aria-pressed={showChat}
-            aria-label="Toggle AI chat panel"
-          >
-            <Bot size={16} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
             onClick={() => setShowNotes(!showNotes)}
             title="Presenter notes"
             aria-pressed={showNotes}
@@ -434,27 +393,17 @@ export const Editor: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { setShowTemplates(!showTemplates); setShowLibrary(false); }}
+            onClick={() => setShowTemplates(!showTemplates)}
             title="Templates"
             aria-pressed={showTemplates}
             aria-label="Toggle templates panel"
           >
             <LayoutTemplate size={16} />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { setShowLibrary(!showLibrary); setShowTemplates(false); }}
-            title="Library Marketplace"
-            aria-pressed={showLibrary}
-            aria-label="Toggle library panel"
-          >
-            <BookOpen size={16} />
-          </Button>
         </div>
       </div>
       <div className={styles.canvasWrapper}>
-        <div className={`${styles.canvas} ${(showRevisions || showNotes || showTemplates || showLibrary) ? styles.canvasNarrow : ''}`}>
+        <div className={`${styles.canvas} ${(showRevisions || showNotes || showTemplates) ? styles.canvasNarrow : ''}`}>
           {initialData && (
             <React.Suspense fallback={<div className={styles.loadingCanvas}>{t('editor.loadingCanvas')}</div>}>
               <Excalidraw
@@ -462,7 +411,7 @@ export const Editor: React.FC = () => {
                 initialData={initialData}
                 onChange={handleExcalidrawChange}
                 theme={appTheme === 'dark' ? 'dark' : 'light'}
-                gridModeEnabled={true}
+                gridModeEnabled={false}
                 UIOptions={{
                   canvasActions: {
                     saveToActiveFile: false,
@@ -550,66 +499,6 @@ export const Editor: React.FC = () => {
           </div>
         )}
 
-        {showLibrary && (
-          <div className={styles.sidePanel}>
-            <div className={styles.sidePanelHeader}>
-              <h3>Library Marketplace</h3>
-              <Button variant="ghost" size="sm" onClick={() => setShowLibrary(false)} aria-label="Close">
-                <ChevronRight size={16} />
-              </Button>
-            </div>
-            <div className={styles.sidePanelContent}>
-              <div className={styles.sidePanelSearch}>
-                <Search size={14} />
-                <input
-                  type="text"
-                  placeholder="Search libraries..."
-                  value={librarySearch}
-                  onChange={(e) => setLibrarySearch(e.target.value)}
-                  className={styles.sidePanelInput}
-                />
-              </div>
-              <select
-                className={styles.sidePanelSelect}
-                value={libraryCategory}
-                onChange={(e) => setLibraryCategory(e.target.value)}
-              >
-                {libraryCategories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-              {libraryLoading && (
-                <div className={styles.sidePanelLoading}>
-                  <Loader2 size={20} className={styles.spinner} />
-                  <span>Loading...</span>
-                </div>
-              )}
-              {libraryError && (
-                <div className={styles.sidePanelError}>{libraryError}</div>
-              )}
-              {!libraryLoading && !libraryError && libraryFiltered.length === 0 && (
-                <div className={styles.sidePanelEmpty}>No libraries found</div>
-              )}
-              {!libraryLoading && libraryFiltered.map((item: any) => (
-                <button
-                  key={item.key}
-                  className={styles.sidePanelItem}
-                  onClick={() => handleLoadLibraryItem(item)}
-                >
-                  <span className={styles.sidePanelItemTitle}>{item.name}</span>
-                  <span className={styles.sidePanelItemDesc}>{item.description || item.tags.slice(0, 3).join(', ')}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {showChat && (
-          <ChatPanel
-            onClose={() => setShowChat(false)}
-            drawingContext={drawing?.title}
-          />
-        )}
       </div>
     </div>
   );

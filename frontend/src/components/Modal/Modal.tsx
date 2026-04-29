@@ -46,6 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen, onCancel, onClose]);
 
   if (!isOpen) return null;
+  const close = () => onCancel?.() ?? onClose?.();
 
   const iconMap = {
     confirm: <AlertTriangle size={24} className={styles.iconWarning} />,
@@ -59,7 +60,7 @@ export const Modal: React.FC<ModalProps> = ({
       className={styles.overlay}
       onClick={(e) => {
         if (e.target === overlayRef.current) {
-          onCancel?.() ?? onClose?.();
+          close();
         }
       }}
       role="dialog"
@@ -72,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({
           <h3 id="modal-title" className={styles.title}>{title}</h3>
           <button
             className={styles.closeBtn}
-            onClick={() => onCancel?.() ?? onClose?.()}
+            onClick={close}
             aria-label="Close"
           >
             <X size={18} />
@@ -83,14 +84,14 @@ export const Modal: React.FC<ModalProps> = ({
           {type === 'confirm' && (
             <button
               className={styles.btnSecondary}
-              onClick={() => onCancel?.() ?? onClose?.()}
+              onClick={close}
             >
               {cancelText}
             </button>
           )}
           <button
             className={type === 'alert' ? styles.btnDanger : styles.btnPrimary}
-            onClick={() => onConfirm?.() ?? onClose?.()}
+            onClick={() => onConfirm?.() ?? close()}
           >
             {confirmText}
           </button>

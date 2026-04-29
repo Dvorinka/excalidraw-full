@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"excalidraw-complete/handlers/api/firebase"
 	"excalidraw-complete/handlers/api/kv"
-	"excalidraw-complete/handlers/api/openai"
 	"excalidraw-complete/handlers/auth"
 	authMiddleware "excalidraw-complete/middleware"
 	"excalidraw-complete/stores"
@@ -158,9 +157,6 @@ func setupRouter(store stores.Store, workspaceAPI *workspace.API) *chi.Mux {
 					r.Put("/", kv.HandleSaveCanvas(store))
 					r.Delete("/", kv.HandleDeleteCanvas(store))
 				})
-			})
-			r.Route("/chat", func(r chi.Router) {
-				r.Post("/completions", openai.HandleChatCompletion())
 			})
 		})
 
@@ -389,7 +385,6 @@ func main() {
 	}
 
 	auth.InitAuth()
-	openai.Init()
 	store := stores.GetStore()
 	workspaceStore, err := workspace.NewStore(os.Getenv("DATABASE_URL"))
 	if err != nil {

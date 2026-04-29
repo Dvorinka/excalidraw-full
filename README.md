@@ -14,7 +14,6 @@ Excalidraw FULL is a production-grade visual workspace platform. It is no longer
 - **Activity history and auditability** — every action is tracked
 - **Templates and structured productivity** — system + team + personal templates
 - **Rich linking between canvases** — embeds, references, knowledge graph
-- **AI chat integration** — OpenAI proxy for diagram generation assistance
 - **Command palette** — global `Cmd/Ctrl+K` for power users
 - **Fulltext search** — find drawings from anywhere
 - **Revision browser** — time-travel through drawing history with one-click restore
@@ -38,6 +37,93 @@ make docker-up # Or run via Docker Compose
 ```
 
 The application will be available at `http://localhost:3002`.
+
+## Quick Start with Docker (Pre-built Image)
+
+Run the latest pre-built image without cloning or building:
+
+### 1. Create the Docker Compose file
+
+```bash
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: excalidraw-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-excalidraw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-excalidraw}
+      POSTGRES_DB: ${POSTGRES_DB:-excalidraw}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  excalidraw:
+    image: ghcr.io/dvorinka/excalidraw-full:latest
+    container_name: excalidraw-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3002}:3002"
+    environment:
+      - LISTEN_ADDR=:3002
+      - STORAGE_TYPE=postgres
+      - DATABASE_URL=postgres://${POSTGRES_USER:-excalidraw}:${POSTGRES_PASSWORD:-excalidraw}@postgres:5432/${POSTGRES_DB:-excalidraw}?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
+      # Optional: GitHub OAuth
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      # Optional: Generic OIDC
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+```
+
+### 2. Set Environment Variables
+
+**For Dokploy/CasaOS:** Configure these in the UI under Environment Variables.
+
+**For CLI/Terminal:** Create a `.env` file:
+
+```bash
+cat > .env << EOF
+# Required: Generate with: openssl rand -base64 32
+JWT_SECRET=your-secure-random-string-min-32-chars
+
+# Optional: Change defaults or leave as-is
+POSTGRES_USER=excalidraw
+POSTGRES_PASSWORD=excalidraw
+POSTGRES_DB=excalidraw
+PORT=3002
+
+# Optional: GitHub OAuth (for social login)
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# Optional: Generic OIDC (for SSO)
+OIDC_ISSUER_URL=
+OIDC_CLIENT_ID=
+OIDC_CLIENT_SECRET=
+
+EOF
+```
+
+### 3. Start the services
+
+```bash
+docker compose up -d
+```
+
+The app will be available at `http://localhost:3002` (or your configured `PORT`).
 
 ## Docker Images
 
@@ -72,8 +158,6 @@ All configuration is via environment variables. See `.env.example` for the full 
 | `OIDC_ISSUER_URL` | No* | Generic OIDC issuer for SSO |
 | `OIDC_CLIENT_ID` | No* | OIDC client ID |
 | `OIDC_CLIENT_SECRET` | No* | OIDC client secret |
-| `OPENAI_API_KEY` | No | Enables AI chat/completion proxy |
-| `OPENAI_BASE_URL` | No | OpenAI-compatible API base URL |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins |
 | `LISTEN_ADDR` | No | Server bind address (default `:3002`) |
 
@@ -158,13 +242,13 @@ make help               # Show all targets
 │   ├── rate_limiter.go         # Auth endpoint rate limiting
 │   └── *_test.go               # Go unit tests
 ├── middleware/                 # Auth, security headers
-├── handlers/                   # Legacy firebase, kv, openai, auth
+├── handlers/                   # Legacy firebase, kv, auth
 ├── frontend/                   # React + Vite frontend
 │   ├── src/
 │   │   ├── pages/              # Dashboard, Editor, Auth, Settings, etc.
 │   │   ├── components/         # Reusable UI (Button, Card, CommandPalette, etc.)
 │   │   ├── stores/             # Zustand state management
-│   │   ├── services/           # API client + OpenAI proxy
+│   │   ├── services/           # API client
 │   │   ├── i18n/               # Translation files (en.json)
 │   │   └── styles/             # Global SCSS + CSS variables
 │   └── package.json
@@ -190,23 +274,6 @@ make help               # Show all targets
 ## Internationalization
 
 Frontend uses `react-i18next` with `i18next-browser-languagedetector`. All UI strings are externalized to `frontend/src/i18n/locales/en.json`. Add new keys there and reference via `t('key')`.
-
-## Roadmap
-
-See `plus-roadmap.md` for upcoming features. Shipped highlights:
-
-- Archive (trash) instead of delete
-- Activity feed with full audit trail
-- Command palette for whole app (`Cmd/Ctrl+K`)
-- Fulltext search
-- Versioning with revision browser
-- Public API (OpenAPI + TS client generation)
-- Self-hosting via Docker
-- Presenter notes
-- Scene filtering and sorting
-- Template gallery with apply flow
-- Dark mode sync with canvas
-- Mobile-responsive navigation
 
 ## License
 

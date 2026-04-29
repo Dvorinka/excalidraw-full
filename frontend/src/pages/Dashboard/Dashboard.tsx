@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Clock, Star, Users, FileText, Plus, Loader2, FolderPlus, UserPlus, BookOpen, Activity } from 'lucide-react';
-import { Button, Card, CardHeader, CardContent, TemplatePicker } from '@/components';
+import { Clock, Database, Users, FileText, Plus, Loader2, FolderPlus, UserPlus, Activity } from 'lucide-react';
+import { Button, Card, CardHeader, CardContent } from '@/components';
 import { useDrawingStore, useAuthStore } from '@/stores';
 import { api } from '@/services';
-import { BUILTIN_TEMPLATES } from '@/components/TemplatePicker/TemplatePicker';
-import type { PickedTemplate } from '@/components/TemplatePicker/TemplatePicker';
 import styles from './Dashboard.module.scss';
 
-const StatChart: React.FC<{ value: number; max: number; color?: string }> = ({ value, max, color = '#6965db' }) => {
-  const pct = max > 0 ? (value / max) * 100 : 0;
+const ACTIVITY_LIMIT = 5;
+
+const StatChart: React.FC<{ value: number; max: number }> = ({ value, max }) => {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
     <div className={styles.chartBarWrap} aria-hidden="true">
       <div className={styles.chartBarBg} />
-      <div className={styles.chartBar} style={{ width: `${pct}%`, background: color }} />
+      <div className={styles.chartBar} style={{ width: `${pct}%` }} />
     </div>
   );
 };
@@ -25,7 +25,6 @@ export const Dashboard: React.FC = () => {
   const { recentDrawings, setRecentDrawings, activity, setActivity } = useDrawingStore();
   const { user } = useAuthStore();
   const [isCreating, setIsCreating] = useState(false);
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [statsData, setStatsData] = useState({
     teams: 0,
     members: 0,
@@ -56,21 +55,14 @@ export const Dashboard: React.FC = () => {
     loadData();
   }, [setRecentDrawings, setActivity]);
 
-  const handleCreateDrawing = async (template: PickedTemplate = 'blank') => {
+  const handleCreateDrawing = async () => {
     setIsCreating(true);
     try {
       const newDrawing = await api.drawings.create({
-        title: template === 'blank' ? 'Untitled Drawing' : `${template.charAt(0).toUpperCase() + template.slice(1)}`,
+        title: 'Untitled Drawing',
         visibility: 'team',
       });
       setRecentDrawings([newDrawing, ...recentDrawings]);
-      if (template !== 'blank' && BUILTIN_TEMPLATES[template]) {
-        localStorage.setItem(`template_${newDrawing.id}`, JSON.stringify({
-          elements: BUILTIN_TEMPLATES[template],
-          appState: {},
-          files: {},
-        }));
-      }
       navigate(`/drawing/${newDrawing.id}`);
     } catch (err) {
       console.error('Failed to create drawing:', err);
@@ -88,14 +80,18 @@ export const Dashboard: React.FC = () => {
   };
 
   const maxStat = Math.max(statsData.drawings, statsData.projects + statsData.folders, statsData.teams, statsData.revisions, 1);
+  const storageMax = Math.max(Number(statsData.storage_bytes), 1024 * 1024);
 
   const stats = [
-    { label: t('dashboard.stats.drawings'), value: statsData.drawings, icon: FileText, color: '#6965db' },
-    { label: t('dashboard.stats.projects'), value: statsData.projects + statsData.folders, icon: FolderPlus, color: '#4dabf7' },
-    { label: t('dashboard.stats.teams'), value: statsData.teams, icon: Users, color: '#51cf66' },
-    { label: t('dashboard.stats.revisions'), value: statsData.revisions, icon: Clock, color: '#fcc419' },
-    { label: t('dashboard.stats.storage'), value: formatBytes(Number(statsData.storage_bytes)), raw: statsData.storage_bytes, icon: Star, color: '#ff6b6b' },
+    { label: t('dashboard.stats.drawings'), value: statsData.drawings, chartValue: statsData.drawings, max: maxStat, icon: FileText },
+    { label: t('dashboard.stats.projects'), value: statsData.projects + statsData.folders, chartValue: statsData.projects + statsData.folders, max: maxStat, icon: FolderPlus },
+    { label: t('dashboard.stats.teams'), value: statsData.teams, chartValue: statsData.teams, max: maxStat, icon: Users },
+    { label: t('dashboard.stats.revisions'), value: statsData.revisions, chartValue: statsData.revisions, max: maxStat, icon: Clock },
+    { label: t('dashboard.stats.storage'), value: formatBytes(Number(statsData.storage_bytes)), chartValue: Number(statsData.storage_bytes), max: storageMax, icon: Database },
   ];
+  const visibleActivity = activity
+    .filter((event) => event.event_type !== 'revision_created')
+    .slice(0, ACTIVITY_LIMIT);
 
   return (
     <div className={styles.container}>
@@ -105,11 +101,6 @@ export const Dashboard: React.FC = () => {
           <p className={styles.subtitle}>{t('dashboard.subtitle')}</p>
         </div>
         <div className={styles.quickActions}>
-          <TemplatePicker
-            isOpen={showTemplatePicker}
-            onClose={() => setShowTemplatePicker(false)}
-            onSelect={(t) => { setShowTemplatePicker(false); handleCreateDrawing(t); }}
-          />
           <Button
             variant="secondary"
             onClick={() => navigate('/files')}
@@ -127,15 +118,7 @@ export const Dashboard: React.FC = () => {
             Invite
           </Button>
           <Button
-            variant="secondary"
-            onClick={() => navigate('/library')}
-            className={styles.actionBtn}
-          >
-            <BookOpen size={16} />
-            Library
-          </Button>
-          <Button
-            onClick={() => setShowTemplatePicker(true)}
+            onClick={handleCreateDrawing}
             loading={isCreating}
             className={styles.createButton}
           >
@@ -158,7 +141,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className={styles.statValue}>{stat.value}</div>
               <div className={styles.statLabel}>{stat.label}</div>
-              <StatChart value={typeof stat.value === 'number' ? stat.value : 0} max={maxStat} color={stat.color} />
+              <StatChart value={stat.chartValue} max={stat.max} />
             </CardContent>
           </Card>
         ))}
@@ -235,13 +218,13 @@ export const Dashboard: React.FC = () => {
               <h3><Activity size={16} style={{ display: 'inline', marginRight: 8, verticalAlign: 'middle' }} />Recent Activity</h3>
             </CardHeader>
             <CardContent>
-              {activity.length === 0 ? (
+              {visibleActivity.length === 0 ? (
                 <div className={styles.empty}>
                   <p className={styles.emptySub}>No recent activity</p>
                 </div>
               ) : (
                 <ul className={styles.activityList}>
-                  {activity.slice(0, 8).map((event) => (
+                  {visibleActivity.map((event) => (
                     <li key={event.id} className={styles.activityItem}>
                       <div className={styles.activityAvatar}>
                         {event.actor?.name?.[0] || '?'}

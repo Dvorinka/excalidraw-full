@@ -822,7 +822,15 @@ func (s *Store) ListFolders(ctx context.Context, userID, teamID string) ([]Folde
 }
 
 func (s *Store) CreateFolder(ctx context.Context, userID string, req CreateFolderRequest) (*Folder, error) {
-	if ok, err := s.UserCanAccessTeam(ctx, userID, req.TeamID); err != nil || !ok {
+	teamID := strings.TrimSpace(req.TeamID)
+	if teamID == "" {
+		var err error
+		teamID, err = s.defaultTeamID(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if ok, err := s.UserCanAccessTeam(ctx, userID, teamID); err != nil || !ok {
 		return nil, ErrForbidden
 	}
 	name := strings.TrimSpace(req.Name)
@@ -836,7 +844,7 @@ func (s *Store) CreateFolder(ctx context.Context, userID string, req CreateFolde
 	now := time.Now().UTC()
 	folder := &Folder{
 		ID:             newID(),
-		TeamID:         req.TeamID,
+		TeamID:         teamID,
 		ProjectID:      req.ProjectID,
 		ParentFolderID: req.ParentFolderID,
 		Name:           name,

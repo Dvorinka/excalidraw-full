@@ -64,23 +64,12 @@ test.describe.serial('dashboard', () => {
     await expect(page.getByRole('heading', { name: 'Team Settings' })).toBeVisible();
   });
 
-  test('quick action: Library navigates to marketplace', async ({ page }) => {
-    await page.goto(BASE + '/');
-    await page.getByRole('button', { name: 'Library' }).click();
-    await expect(page).toHaveURL(/\/library/);
-    await expect(page.getByRole('heading', { name: 'Library Marketplace' })).toBeVisible();
-  });
-
-  test('New Drawing opens template picker', async ({ page }) => {
+  test('New Drawing opens a blank fullscreen editor', async ({ page }) => {
     await page.goto(BASE + '/');
     await page.getByRole('button', { name: 'New Drawing' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Choose a Template' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Blank Canvas' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'To-Do List' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Checklist' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Bullet List' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Flow Chart' })).toBeVisible();
+    await expect(page).toHaveURL(/\/drawing\//);
+    await expect(page.getByRole('button', { name: /Save Now/i })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeHidden();
   });
 });
 
@@ -97,10 +86,17 @@ test.describe.serial('projects', () => {
   test('can create a drawing from file browser', async ({ page }) => {
     await page.goto(BASE + '/files');
     await page.getByRole('button', { name: 'Create new drawing' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByRole('button', { name: 'Blank Canvas' }).click();
     await expect(page).toHaveURL(/\/drawing\//);
     await expect(page.getByText('Loading Excalidraw')).toBeVisible();
+  });
+
+  test('can create a project', async ({ page }) => {
+    await page.goto(BASE + '/files');
+    await page.getByRole('button', { name: 'Create new project' }).click();
+    await page.getByPlaceholder('Project name...').fill('Product sketches');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page).toHaveURL(/\/files\/folder\//);
+    await expect(page.getByText('Product sketches')).toBeVisible();
   });
 });
 
@@ -111,37 +107,18 @@ test.describe.serial('editor', () => {
   test('creates drawing with To-Do template', async ({ page }) => {
     await page.goto(BASE + '/');
     await page.getByRole('button', { name: 'New Drawing' }).click();
-    await page.getByRole('button', { name: 'To-Do List' }).click();
     await expect(page).toHaveURL(/\/drawing\//);
+    await page.getByRole('button', { name: 'Toggle templates panel' }).click();
+    await page.getByText('To-Do List').click();
     await expect(page.getByRole('button', { name: /Save Now/i })).toBeVisible({ timeout: 10000 });
   });
 
   test('editor shows save controls and back button', async ({ page }) => {
     await page.goto(BASE + '/');
     await page.getByRole('button', { name: 'New Drawing' }).click();
-    await page.getByRole('button', { name: 'Blank Canvas' }).click();
     await expect(page).toHaveURL(/\/drawing\//);
     await expect(page.getByRole('button', { name: /Save Now/i })).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('button', { name: /Back/i })).toBeVisible();
-  });
-});
-
-// Library Marketplace
-test.describe.serial('library', () => {
-  test.use({ storageState: 'playwright/.auth/state.json' });
-
-  test('loads marketplace with search and categories', async ({ page }) => {
-    await page.goto(BASE + '/library');
-    await expect(page.getByRole('heading', { name: 'Library Marketplace' })).toBeVisible();
-    await expect(page.getByPlaceholder('Search libraries...')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'All' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Open External' })).toBeVisible();
-  });
-
-  test('search filters libraries', async ({ page }) => {
-    await page.goto(BASE + '/library');
-    await page.getByPlaceholder('Search libraries...').fill('zzzznonexistent');
-    await expect(page.getByText('No libraries found')).toBeVisible();
   });
 });
 

@@ -47,16 +47,24 @@ export const App: React.FC = () => {
   }
 
   return (
-    <AppLayout>
-      <CommandPalette />
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/files/*" element={<FileBrowser />} />
-        <Route path="/team" element={<TeamSettings />} />
-        <Route path="/settings" element={<UserSettings />} />
-        <Route path="/drawing/:id" element={<Editor />} />
-        <Route path="/folder/:folderId/drawing/:id" element={<Editor />} />
-      </Routes>
-    </AppLayout>
+    <Routes>
+      <Route path="/drawing/:id" element={<Editor />} />
+      <Route path="/folder/:folderId/drawing/:id" element={<Editor />} />
+      <Route
+        path="*"
+        element={(
+          <AppLayout>
+            <CommandPalette />
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/files" element={<FileBrowser />} />
+              <Route path="/files/folder/:folderId" element={<FileBrowser />} />
+              <Route path="/team" element={<TeamSettings />} />
+              <Route path="/settings" element={<UserSettings />} />
+            </Routes>
+          </AppLayout>
+        )}
+      />
+    </Routes>
   );
 };

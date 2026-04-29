@@ -16,6 +16,7 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Drawing[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -53,6 +54,21 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
       navigate(`/folder/${drawing.folder_id}/drawing/${drawing.id}`);
     } else {
       navigate(`/drawing/${drawing.id}`);
+    }
+  };
+
+  const handleCreateDrawing = async () => {
+    setIsCreating(true);
+    try {
+      const drawing = await api.drawings.create({
+        title: 'Untitled Drawing',
+        visibility: 'team',
+      });
+      navigate(`/drawing/${drawing.id}`);
+    } catch (err) {
+      console.error('Failed to create drawing:', err);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -117,7 +133,7 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
         <button className={styles.iconButton} aria-label="Notifications" title="Notifications">
           <Bell size={20} aria-hidden="true" />
         </button>
-        <Button>
+        <Button onClick={handleCreateDrawing} loading={isCreating}>
           <Plus size={18} />
           {t('dashboard.newDrawing')}
         </Button>
