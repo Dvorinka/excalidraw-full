@@ -143,6 +143,14 @@ type Template struct {
 	PreviewURL   *string        `json:"preview_url,omitempty"`
 }
 
+type CreateTemplateRequest struct {
+	TeamID      string          `json:"team_id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Snapshot    json.RawMessage `json:"snapshot"`
+	Metadata    map[string]any  `json:"metadata"`
+}
+
 type ActivityEvent struct {
 	ID           string         `json:"id"`
 	ActorUserID  *string        `json:"actor_user_id"`
@@ -202,6 +210,19 @@ type LinkReference struct {
 	Label              *string   `json:"label"`
 	CreatedBy          string    `json:"created_by"`
 	CreatedAt          time.Time `json:"created_at"`
+}
+
+type Notification struct {
+	ID           string         `json:"id"`
+	UserID       string         `json:"user_id"`
+	Type         string         `json:"type"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description"`
+	ResourceType string         `json:"resource_type,omitempty"`
+	ResourceID   string         `json:"resource_id,omitempty"`
+	Read         bool           `json:"read"`
+	MetadataJSON map[string]any `json:"metadata_json"`
+	CreatedAt    time.Time      `json:"created_at"`
 }
 
 type WorkspaceStats struct {

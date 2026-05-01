@@ -7,12 +7,19 @@
 
 .header {
   margin-bottom: var(--space-8);
+  padding: var(--space-5);
+  background: var(--island-bg-color);
+  border: 2px solid var(--color-gray-85);
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 var(--color-gray-85);
+  transform: rotate(-0.2deg);
 
   h1 {
     font-size: var(--text-3xl);
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-gray-85);
     margin-bottom: var(--space-2);
+    font-family: 'Georgia', serif;
   }
 }
 
@@ -59,25 +66,40 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-gray-20);
+  padding: var(--space-3) var(--space-2);
+  margin-bottom: var(--space-2);
+  border: 2px solid var(--color-gray-30);
+  border-radius: 2px;
+  transition: all 0.15s ease;
+  box-shadow: 2px 2px 0 var(--color-gray-85);
+  background: var(--island-bg-color);
+
+  &:hover {
+    border-color: var(--color-primary);
+    background: var(--color-surface-low);
+    transform: translateX(2px) rotate(-0.2deg);
+    box-shadow: 3px 3px 0 var(--color-gray-85);
+  }
 
   &:last-child {
-    border-bottom: none;
+    border-bottom: 2px solid var(--color-gray-30);
+    margin-bottom: 0;
   }
 }
 
 .memberAvatar {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--border-radius-full);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   background: var(--color-primary);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
+  font-weight: 700;
   flex-shrink: 0;
+  border: 2px solid var(--color-gray-85);
+  box-shadow: 2px 2px 0 var(--color-gray-85);
 }
 
 .memberInfo {
@@ -100,11 +122,13 @@
   gap: var(--space-1);
   padding: var(--space-1) var(--space-3);
   background: var(--color-surface-low);
-  border-radius: var(--border-radius-full);
+  border: 2px solid var(--color-gray-30);
+  border-radius: 2px;
   font-size: var(--text-xs);
   font-weight: 500;
   color: var(--color-gray-70);
   text-transform: capitalize;
+  box-shadow: 1px 1px 0 var(--color-gray-85);
 }
 
 .inviteForm {
@@ -115,15 +139,15 @@
 
 .inviteInput {
   padding: var(--space-3);
-  border: 1px solid var(--input-border-color);
-  border-radius: var(--border-radius-md);
+  border: 2px solid var(--color-gray-30);
+  border-radius: 2px;
   font-size: var(--text-sm);
   background: var(--input-bg-color);
 
   &:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    box-shadow: 3px 3px 0 var(--color-gray-85);
   }
 }
 
@@ -163,11 +187,12 @@
 
 .roleSelect {
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--input-border-color);
-  border-radius: var(--border-radius-md);
+  border: 2px solid var(--color-gray-30);
+  border-radius: 2px;
   font-size: var(--text-sm);
   background: var(--input-bg-color);
   cursor: pointer;
+  box-shadow: 1px 1px 0 var(--color-gray-85);
 }
 
 .error {

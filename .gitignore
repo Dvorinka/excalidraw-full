@@ -132,5 +132,12 @@ excalidraw-complete.exe
 # cf-kv worker output
 cf-kv/index.js
 
+# graphify cache and AST (keep output html/json)
+graphify-out/cache/
+graphify-out/.graphify_ast.json
+graphify-out/.graphify_detect.json
+graphify-out/.graphify_python
+graphify-out/.graphify_semantic.json
+
 # Keep dist/.keep for empty directory tracking in git
 !frontend/dist/.keep

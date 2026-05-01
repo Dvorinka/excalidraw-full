@@ -72,12 +72,17 @@ func (a *API) Routes() chi.Router {
 		r.Post("/drawings/{drawingID}/links", a.handleCreateLink)
 		r.Get("/drawings/{drawingID}/thumbnail", a.handleThumbnail)
 		r.Get("/templates", a.handleListTemplates)
+		r.Post("/templates", a.handleCreateTemplate)
+		r.Delete("/templates/{templateID}", a.handleDeleteTemplate)
 		r.Get("/activity", a.handleListActivity)
 		r.Get("/stats", a.handleStats)
 		r.Get("/folders", a.handleListFolders)
 		r.Post("/folders", a.handleCreateFolder)
 		r.Get("/projects", a.handleListProjects)
 		r.Post("/projects", a.handleCreateProject)
+		r.Get("/notifications", a.handleListNotifications)
+		r.Post("/notifications/{notificationID}/read", a.handleMarkNotificationRead)
+		r.Post("/notifications/read-all", a.handleMarkAllNotificationsRead)
 	})
 
 	return r
@@ -134,11 +139,26 @@ func requireSameOriginMutation(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		expectedHTTP := "http://" + r.Host
-		expectedHTTPS := "https://" + r.Host
-		if origin != expectedHTTP && origin != expectedHTTPS {
-			writeError(w, http.StatusForbidden, "Cross-origin mutation denied")
-			return
+		host := r.Host
+		if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
+			host = fwd
+		}
+		proto := "http"
+		if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
+			proto = fwd
+		} else if r.TLS != nil {
+			proto = "https"
+		}
+		expected := proto + "://" + host
+		if origin != expected {
+			// also allow without port in case proxy strips it
+			expectedNoPort := proto + "://" + strings.SplitN(host, ":", 2)[0]
+			originNoPort := strings.SplitN(origin, "://", 2)[1]
+			originNoPort = strings.SplitN(originNoPort, ":", 2)[0]
+			if originNoPort != expectedNoPort {
+				writeError(w, http.StatusForbidden, "Cross-origin mutation denied")
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -342,7 +362,7 @@ func (a *API) handleArchiveDrawing(w http.ResponseWriter, r *http.Request) {
 		writeLookupError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) handleListRevisions(w http.ResponseWriter, r *http.Request) {
@@ -491,6 +511,30 @@ func (a *API) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, templates)
+}
+
+func (a *API) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
+	user, _ := currentUser(r)
+	var req CreateTemplateRequest
+	if !decodeJSON(w, r, &req, 5<<20) {
+		return
+	}
+	template, err := a.store.CreateTemplate(r.Context(), user.ID, req)
+	if err != nil {
+		writeLookupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, template)
+}
+
+func (a *API) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
+	user, _ := currentUser(r)
+	templateID := chi.URLParam(r, "templateID")
+	if err := a.store.DeleteTemplate(r.Context(), user.ID, templateID); err != nil {
+		writeLookupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) handleListActivity(w http.ResponseWriter, r *http.Request) {
@@ -642,6 +686,55 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// Notification handlers
+func (a *API) handleListNotifications(w http.ResponseWriter, r *http.Request) {
+	user, _ := currentUser(r)
+	if user == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+	notifications, err := a.store.ListNotifications(ctx, user.ID, 50)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, notifications)
+}
+
+func (a *API) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request) {
+	user, _ := currentUser(r)
+	if user == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+	notificationID := chi.URLParam(r, "notificationID")
+	if err := a.store.MarkNotificationRead(ctx, user.ID, notificationID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) handleMarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
+	user, _ := currentUser(r)
+	if user == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "unauthorized"})
+		return
+	}
+	ctx := r.Context()
+	if err := a.store.MarkAllNotificationsRead(ctx, user.ID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func isSecureRequest(r *http.Request) bool {

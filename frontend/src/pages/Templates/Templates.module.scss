@@ -78,6 +78,16 @@
 
 .templateCard {
   overflow: hidden;
+  border: 2px solid var(--color-gray-85);
+  border-radius: 2px;
+  box-shadow: 3px 3px 0 var(--color-gray-85);
+  transform: rotate(0.1deg);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: rotate(0) translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--color-gray-85);
+  }
 }
 
 .preview {
@@ -143,8 +153,14 @@
 }
 
 .useBtn {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
   margin-top: var(--space-3);
-  width: 100%;
+  align-items: center;
 }
 
 .modalOverlay {

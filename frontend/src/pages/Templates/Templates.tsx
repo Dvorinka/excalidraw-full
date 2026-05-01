@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, X, Loader2, FilePlus } from 'lucide-react';
-import { Card, CardContent, Button, Input } from '@/components';
-import { useDrawingStore } from '@/stores';
+import { Sparkles, FilePlus, Trash2 } from 'lucide-react';
+import { Card, CardContent, Button } from '@/components';
+import { useDrawingStore, useAuthStore } from '@/stores';
 import { api } from '@/services';
 import type { Template, TemplateScope } from '@/types';
 import styles from './Templates.module.scss';
@@ -17,28 +17,16 @@ const categories: { id: TemplateScope | 'all'; label: string }[] = [
 export const Templates: React.FC = () => {
   const navigate = useNavigate();
   const { templates, setTemplates, addDrawing } = useDrawingStore();
+  const { user } = useAuthStore();
   const [active, setActive] = useState<TemplateScope | 'all'>('all');
-  const [showModal, setShowModal] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     api.templates.list().then(setTemplates).catch(console.error);
   }, [setTemplates]);
 
   const filtered = active === 'all' ? templates : templates.filter((t) => t.scope === active);
-
-  const handleCreate = async () => {
-    if (!name.trim()) { setError('Name required'); return; }
-    setCreating(true); setError('');
-    try {
-      const t = await api.templates.create({ name: name.trim(), type: 'empty', scope: 'personal' });
-      setTemplates([t, ...templates]); setShowModal(false); setName('');
-    } catch { setError('Create failed'); }
-    finally { setCreating(false); }
-  };
 
   const handleUseTemplate = async (template: Template) => {
     setApplyingId(template.id);
@@ -47,6 +35,11 @@ export const Templates: React.FC = () => {
         title: template.name,
         visibility: 'team',
       });
+      // Apply template snapshot if available - store in localStorage for editor to pick up
+      if (template.snapshot_path) {
+        // The template data would need to be fetched separately
+        // For now, just navigate to the new drawing
+      }
       addDrawing(drawing);
       navigate(`/drawing/${drawing.id}`);
     } catch (err) {
@@ -56,11 +49,31 @@ export const Templates: React.FC = () => {
     }
   };
 
+  const handleDeleteTemplate = async (template: Template) => {
+    if (!confirm(`Delete template "${template.name}"? This cannot be undone.`)) return;
+    setDeletingId(template.id);
+    try {
+      await api.templates.delete(template.id);
+      setTemplates(templates.filter((t) => t.id !== template.id));
+    } catch (err) {
+      console.error('Failed to delete template:', err);
+      alert('Failed to delete template. You may not have permission.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const canDelete = (template: Template) => {
+    return template.scope !== 'system' && template.created_by === user?.id;
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div><h1>Templates</h1><p className={styles.subtitle}>Start from a template or create your own</p></div>
-        <Button onClick={() => setShowModal(true)}><Plus size={18} />Create</Button>
+        <div>
+          <h1>Templates</h1>
+          <p className={styles.subtitle}>Start from a template. Create custom templates from any drawing using the "Save as Template" button in the editor.</p>
+        </div>
       </div>
       <div className={styles.categories} role="tablist">
         {categories.map((c) => (
@@ -71,7 +84,7 @@ export const Templates: React.FC = () => {
       <div className={styles.grid} role="tabpanel">
         {filtered.length === 0 ? (
           <div className={styles.empty} role="status"><Sparkles size={48} aria-hidden="true" />
-            <p>No templates</p><p className={styles.emptySub}>Create your first template</p></div>
+            <p>No templates</p><p className={styles.emptySub}>Create your first template from any drawing</p></div>
         ) : filtered.map((t) => (
           <Card key={t.id} className={styles.templateCard} hover>
             <div className={styles.preview}>
@@ -84,31 +97,34 @@ export const Templates: React.FC = () => {
                 <span className={styles.scope}>{t.scope}</span>
                 <span className={styles.type}>{t.type}</span>
               </div>
-              <Button
-                size="sm"
-                className={styles.useBtn}
-                onClick={() => handleUseTemplate(t)}
-                loading={applyingId === t.id}
-                aria-label={`Use template ${t.name}`}
-              >
-                <FilePlus size={14} />
-                Use Template
-              </Button>
+              <div className={styles.actions}>
+                <Button
+                  size="sm"
+                  className={styles.useBtn}
+                  onClick={() => handleUseTemplate(t)}
+                  loading={applyingId === t.id}
+                  aria-label={`Use template ${t.name}`}
+                >
+                  <FilePlus size={14} />
+                  Use Template
+                </Button>
+                {canDelete(t) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteTemplate(t)}
+                    loading={deletingId === t.id}
+                    aria-label={`Delete template ${t.name}`}
+                    title="Delete template"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
-      {showModal && (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="tm-title" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-          <div className={styles.modal}>
-            <div className={styles.modalHeader}><h2 id="tm-title">Create Template</h2><button onClick={() => setShowModal(false)} aria-label="Close"><X size={18} /></button></div>
-            <div className={styles.modalBody}>
-              <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} error={error} />
-              {creating ? <Loader2 className={styles.spinner} size={20} /> : <Button onClick={handleCreate}>Create</Button>}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,12 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Bell, Plus, FileText, Loader2, Sun, Moon } from 'lucide-react';
+import { Search, Bell, Plus, FileText, Loader2, Sun, Moon, Check, X } from 'lucide-react';
 import { Button } from '@/components';
 import { useThemeStore } from '@/stores';
 import { api } from '@/services';
 import type { Drawing } from '@/types';
 import styles from './Layout.module.scss';
+
+interface AppNotification {
+  id: string;
+  type: 'share' | 'comment' | 'mention' | 'update';
+  title: string;
+  description: string;
+  time: string;
+  read: boolean;
+  drawingId?: string;
+}
 
 export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
@@ -17,8 +27,36 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newDrawingName, setNewDrawingName] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Fetch notifications on mount
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await api.notifications.list();
+        setNotifications(res as unknown as AppNotification[]);
+      } catch {
+        setNotifications([]);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const dismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
 
   const performSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
@@ -56,11 +94,18 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
     }
   };
 
-  const handleCreateDrawing = async () => {
+  const handleCreateDrawing = () => {
+    setNewDrawingName('');
+    setShowNameModal(true);
+  };
+
+  const confirmCreateDrawing = async () => {
+    const title = newDrawingName.trim() || 'Untitled Drawing';
     setIsCreating(true);
+    setShowNameModal(false);
     try {
       const drawing = await api.drawings.create({
-        title: 'Untitled Drawing',
+        title,
         visibility: 'team',
       });
       navigate(`/drawing/${drawing.id}`);
@@ -75,6 +120,9 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
     const onClick = (e: MouseEvent) => {
       if (!searchRef.current?.contains(e.target as Node)) {
         setShowResults(false);
+      }
+      if (!notifRef.current?.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', onClick);
@@ -125,18 +173,69 @@ export const Header: React.FC<{ children?: React.ReactNode }> = ({ children }) =
         )}
       </div>
       
-      <div className={styles.actions}>
+      <div className={styles.actions} ref={notifRef}>
         <button className={styles.iconButton} onClick={toggleTheme} title={t('userSettings.theme')} aria-label={t('userSettings.theme')}>
           {theme === 'light' ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
         </button>
-        <button className={styles.iconButton} aria-label="Notifications" title="Notifications">
+        <button className={styles.iconButton} aria-label="Notifications" title="Notifications" onClick={() => setShowNotifications((v) => !v)}>
           <Bell size={20} aria-hidden="true" />
+          {unreadCount > 0 && <span className={styles.notifBadge}>{unreadCount}</span>}
         </button>
+        {showNotifications && (
+          <div className={styles.notifDropdown}>
+            <div className={styles.notifHeader}>
+              <span className={styles.notifTitle}>Notifications</span>
+              <button className={styles.notifMarkAll} onClick={markAllRead} aria-label="Mark all as read">
+                <Check size={14} aria-hidden="true" /> All read
+              </button>
+            </div>
+            {notifications.length === 0 ? (
+              <div className={styles.notifEmpty}>No notifications yet</div>
+            ) : (
+              notifications.map((n) => (
+                <div key={n.id} className={`${styles.notifItem} ${!n.read ? styles.notifUnread : ''}`}>
+                  <div className={styles.notifContent}>
+                    <div className={styles.notifItemTitle}>{n.title}</div>
+                    <div className={styles.notifItemDesc}>{n.description}</div>
+                    <div className={styles.notifItemTime}>{n.time}</div>
+                  </div>
+                  <button className={styles.notifDismiss} onClick={() => dismissNotification(n.id)} aria-label="Dismiss notification">
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
         <Button onClick={handleCreateDrawing} loading={isCreating}>
           <Plus size={18} />
           {t('dashboard.newDrawing')}
         </Button>
       </div>
+
+      {showNameModal && (
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) setShowNameModal(false); }}>
+          <div className={styles.nameModal}>
+            <h3>New Drawing</h3>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Drawing name..."
+              value={newDrawingName}
+              onChange={(e) => setNewDrawingName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmCreateDrawing();
+                if (e.key === 'Escape') setShowNameModal(false);
+              }}
+              className={styles.nameInput}
+            />
+            <div className={styles.nameModalActions}>
+              <button className={styles.nameModalCancel} onClick={() => setShowNameModal(false)}>Cancel</button>
+              <button className={styles.nameModalConfirm} onClick={confirmCreateDrawing}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

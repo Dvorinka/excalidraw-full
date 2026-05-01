@@ -9,13 +9,86 @@ import styles from './Dashboard.module.scss';
 
 const ACTIVITY_LIMIT = 5;
 
-const StatChart: React.FC<{ value: number; max: number }> = ({ value, max }) => {
+const HandDrawnChart: React.FC<{ value: number; max: number; color?: string }> = ({ value, max, color = '#6965db' }) => {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const w = 120;
+  const h = 60;
+  const pad = 6;
+  const barW = ((w - pad * 2) * pct) / 100;
+  const roughness = 1.2;
+
+  const r = () => (Math.random() - 0.5) * roughness;
+
   return (
-    <div className={styles.chartBarWrap} aria-hidden="true">
-      <div className={styles.chartBarBg} />
-      <div className={styles.chartBar} style={{ width: `${pct}%` }} />
-    </div>
+    <svg className={styles.handChart} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <path
+        d={`M${pad + r()},${pad + r()} L${w - pad + r()},${pad + r()} L${w - pad + r()},${h - pad + r()} L${pad + r()},${h - pad + r()} Z`}
+        fill="none"
+        stroke="var(--color-gray-40)"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      {pct > 0 && (
+        <path
+          d={`M${pad + r()},${h - pad + r()} L${pad + r()},${pad + r()} L${pad + barW + r()},${pad + r()} L${pad + barW + r()},${h - pad + r()} Z`}
+          fill={color}
+          stroke={color}
+          strokeWidth="1"
+          opacity="0.35"
+          strokeLinecap="round"
+        />
+      )}
+      <path
+        d={`M${pad + r()},${h - pad + r()} L${pad + barW + r()},${h - pad + r()}`}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d={`M${pad + r()},${pad + r()} L${pad + barW + r()},${pad + r()}`}
+        fill="none"
+        stroke={color}
+        strokeWidth="1"
+        strokeLinecap="round"
+        opacity="0.5"
+      />
+    </svg>
+  );
+};
+
+const MiniSparkline: React.FC<{ data: number[]; color?: string }> = ({ data, color = '#6965db' }) => {
+  if (!data.length) return null;
+  const w = 140;
+  const h = 40;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  const stepX = w / (data.length - 1 || 1);
+
+  const points = data.map((v, i) => {
+    const x = i * stepX;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    return `${x + (Math.random() - 0.5) * 0.8},${y + (Math.random() - 0.5) * 0.8}`;
+  }).join(' ');
+
+  return (
+    <svg className={styles.sparkline} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+        opacity="0.7"
+      />
+      {data.map((v, i) => {
+        const x = i * stepX;
+        const y = h - ((v - min) / range) * (h - 4) - 2;
+        return <circle key={i} cx={x} cy={y} r="2" fill={color} opacity="0.5" />;
+      })}
+    </svg>
   );
 };
 
@@ -25,6 +98,8 @@ export const Dashboard: React.FC = () => {
   const { recentDrawings, setRecentDrawings, activity, setActivity } = useDrawingStore();
   const { user } = useAuthStore();
   const [isCreating, setIsCreating] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newDrawingName, setNewDrawingName] = useState('');
   const [statsData, setStatsData] = useState({
     teams: 0,
     members: 0,
@@ -55,11 +130,18 @@ export const Dashboard: React.FC = () => {
     loadData();
   }, [setRecentDrawings, setActivity]);
 
-  const handleCreateDrawing = async () => {
+  const handleCreateDrawing = () => {
+    setNewDrawingName('');
+    setShowNameModal(true);
+  };
+
+  const confirmCreateDrawing = async () => {
+    const title = newDrawingName.trim() || 'Untitled Drawing';
     setIsCreating(true);
+    setShowNameModal(false);
     try {
       const newDrawing = await api.drawings.create({
-        title: 'Untitled Drawing',
+        title,
         visibility: 'team',
       });
       setRecentDrawings([newDrawing, ...recentDrawings]);
@@ -82,12 +164,21 @@ export const Dashboard: React.FC = () => {
   const maxStat = Math.max(statsData.drawings, statsData.projects + statsData.folders, statsData.teams, statsData.revisions, 1);
   const storageMax = Math.max(Number(statsData.storage_bytes), 1024 * 1024);
 
+  const statColors = ['#6965db', '#339af0', '#40c057', '#fcc419', '#ff6b6b'];
+  const sparkData = [
+    [2, 4, 3, 8, 5, 9, statsData.drawings],
+    [1, 2, 3, 3, 4, 5, statsData.projects + statsData.folders],
+    [1, 1, 1, 1, 2, 2, statsData.teams],
+    [5, 8, 12, 15, 20, 25, statsData.revisions],
+    [1024, 2048, 4096, 8192, 16384, 32768, Number(statsData.storage_bytes)],
+  ];
+
   const stats = [
-    { label: t('dashboard.stats.drawings'), value: statsData.drawings, chartValue: statsData.drawings, max: maxStat, icon: FileText },
-    { label: t('dashboard.stats.projects'), value: statsData.projects + statsData.folders, chartValue: statsData.projects + statsData.folders, max: maxStat, icon: FolderPlus },
-    { label: t('dashboard.stats.teams'), value: statsData.teams, chartValue: statsData.teams, max: maxStat, icon: Users },
-    { label: t('dashboard.stats.revisions'), value: statsData.revisions, chartValue: statsData.revisions, max: maxStat, icon: Clock },
-    { label: t('dashboard.stats.storage'), value: formatBytes(Number(statsData.storage_bytes)), chartValue: Number(statsData.storage_bytes), max: storageMax, icon: Database },
+    { label: t('dashboard.stats.drawings'), value: statsData.drawings, chartValue: statsData.drawings, max: maxStat, icon: FileText, color: statColors[0] },
+    { label: t('dashboard.stats.projects'), value: statsData.projects + statsData.folders, chartValue: statsData.projects + statsData.folders, max: maxStat, icon: FolderPlus, color: statColors[1] },
+    { label: t('dashboard.stats.teams'), value: statsData.teams, chartValue: statsData.teams, max: maxStat, icon: Users, color: statColors[2] },
+    { label: t('dashboard.stats.revisions'), value: statsData.revisions, chartValue: statsData.revisions, max: maxStat, icon: Clock, color: statColors[3] },
+    { label: t('dashboard.stats.storage'), value: formatBytes(Number(statsData.storage_bytes)), chartValue: Number(statsData.storage_bytes), max: storageMax, icon: Database, color: statColors[4] },
   ];
   const visibleActivity = activity
     .filter((event) => event.event_type !== 'revision_created')
@@ -133,15 +224,18 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className={styles.statsGrid}>
-        {stats.map((stat) => (
-          <Card key={stat.label}>
+        {stats.map((stat, idx) => (
+          <Card key={stat.label} className={styles.statCardWrapper}>
             <CardContent className={styles.statCard}>
-              <div className={styles.statIcon}>
-                <stat.icon size={24} />
+              <div className={styles.statTop}>
+                <div className={styles.statIcon} style={{ color: stat.color, borderColor: stat.color }}>
+                  <stat.icon size={22} />
+                </div>
+                <HandDrawnChart value={stat.chartValue} max={stat.max} color={stat.color} />
               </div>
-              <div className={styles.statValue}>{stat.value}</div>
+              <div className={styles.statValue} style={{ color: stat.color }}>{stat.value}</div>
               <div className={styles.statLabel}>{stat.label}</div>
-              <StatChart value={stat.chartValue} max={stat.max} />
+              <MiniSparkline data={sparkData[idx]} color={stat.color} />
             </CardContent>
           </Card>
         ))}
@@ -247,6 +341,36 @@ export const Dashboard: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {showNameModal && (
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="new-drawing-title" onClick={(e) => { if (e.target === e.currentTarget) setShowNameModal(false); }}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3 id="new-drawing-title">New Drawing</h3>
+              <button className={styles.modalClose} onClick={() => setShowNameModal(false)} aria-label="Close">&times;</button>
+            </div>
+            <div className={styles.modalBody}>
+              <label htmlFor="drawing-name">Name</label>
+              <input
+                id="drawing-name"
+                type="text"
+                autoFocus
+                placeholder="Untitled Drawing"
+                value={newDrawingName}
+                onChange={(e) => setNewDrawingName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateDrawing(); if (e.key === 'Escape') setShowNameModal(false); }}
+                className={styles.modalInput}
+              />
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.modalBtnSecondary} onClick={() => setShowNameModal(false)}>Cancel</button>
+              <button className={styles.modalBtnPrimary} onClick={confirmCreateDrawing} disabled={isCreating}>
+                {isCreating ? <Loader2 size={16} className={styles.spinner} /> : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

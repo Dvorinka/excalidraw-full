@@ -15,6 +15,15 @@
   padding: 0 var(--space-4);
   background: var(--island-bg-color);
   border-bottom: 1px solid var(--color-gray-20);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.toolbarHidden {
+  height: 0;
+  overflow: hidden;
+  padding: 0;
+  border: none;
+  opacity: 0;
 }
 
 .left {
@@ -377,6 +386,136 @@
 
 .sidePanelError {
   color: var(--color-danger);
+}
+
+.presentationOverlay {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 200;
+  pointer-events: auto;
+  animation: presentationFadeIn 0.3s var(--ease-out);
+}
+
+@keyframes presentationFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.presentationToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--island-bg-color);
+  border: 2px solid var(--color-gray-85);
+  border-radius: 2px;
+  padding: var(--space-2) var(--space-4);
+  box-shadow: 3px 3px 0 var(--color-gray-85);
+  transform: rotate(-0.3deg);
+}
+
+.presentationLabel {
+  font-size: var(--text-sm);
+  color: var(--color-gray-70);
+  font-weight: 500;
+  font-family: 'Georgia', serif;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background: var(--island-bg-color);
+  border: 2px solid var(--color-gray-85);
+  border-radius: 2px;
+  box-shadow: var(--modal-shadow);
+  width: 420px;
+  max-width: 90vw;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-gray-20);
+  h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+    color: var(--color-gray-85);
+  }
+}
+
+.modalClose {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--color-gray-60);
+  cursor: pointer;
+  line-height: 1;
+  &:hover { color: var(--color-gray-85); }
+}
+
+.modalBody {
+  padding: var(--space-4) var(--space-5);
+  label {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--color-gray-70);
+    margin-bottom: var(--space-2);
+  }
+}
+
+.modalInput {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-gray-20);
+  border-radius: var(--border-radius-md);
+  background: var(--input-bg-color);
+  color: var(--color-on-surface);
+  font-size: var(--text-sm);
+  outline: none;
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
+.modalBtnSecondary {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--color-gray-20);
+  background: transparent;
+  color: var(--color-gray-70);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  &:hover { background: var(--color-surface-low); }
+}
+
+.modalBtnPrimary {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--border-radius-md);
+  border: none;
+  background: var(--color-primary);
+  color: white;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  &:hover { background: var(--color-primary-darker); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
 @media (max-width: 768px) {

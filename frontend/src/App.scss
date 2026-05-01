@@ -6,3 +6,35 @@
   font-size: var(--text-lg);
   color: var(--color-muted);
 }
+
+/* Excalidraw Context Menu Styling Overrides */
+:global(.excalidraw .context-menu) {
+  background: var(--island-bg-color) !important;
+  border: 2px solid var(--color-gray-85) !important;
+  border-radius: 2px !important;
+  box-shadow: 4px 4px 0 var(--color-gray-85) !important;
+  transform: rotate(-0.2deg) !important;
+  padding: 2px !important;
+}
+
+:global(.excalidraw .context-menu-item) {
+  border-radius: 2px !important;
+  color: var(--color-gray-85) !important;
+  font-weight: 500 !important;
+  padding: 6px 12px !important;
+}
+
+:global(.excalidraw .context-menu-item:hover) {
+  background: var(--color-primary-light) !important;
+  color: var(--color-primary-darkest) !important;
+  transform: translateX(1px) !important;
+}
+
+:global(.excalidraw .context-menu-item-separator) {
+  border-top: 2px solid var(--color-gray-30) !important;
+  margin: 2px 4px !important;
+}
+
+:global(.excalidraw .context-menu-item-keybinding) {
+  color: var(--color-muted) !important;
+}

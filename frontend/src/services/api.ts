@@ -9,10 +9,14 @@ class ApiError extends Error {
 }
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...headers,
       ...options?.headers,
     },
   });
@@ -38,7 +42,7 @@ export const api = {
       fetchApi('/drawings', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: object): Promise<Drawing> =>
       fetchApi(`/drawings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    delete: (id: string): Promise<void> =>
+    delete: (id: string): Promise<{ ok: boolean }> =>
       fetchApi(`/drawings/${id}`, { method: 'DELETE' }),
   },
   revisions: {
@@ -66,8 +70,10 @@ export const api = {
   },
   templates: {
     list: (): Promise<Template[]> => fetchApi('/templates'),
-    create: (data: { name: string; type: string; scope: string }): Promise<Template> =>
+    create: (data: { name: string; description?: string; team_id?: string; snapshot: object; metadata?: Record<string, unknown> }): Promise<Template> =>
       fetchApi('/templates', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id: string): Promise<{ ok: boolean }> =>
+      fetchApi(`/templates/${id}`, { method: 'DELETE' }),
   },
   stats: {
     get: (teamId?: string): Promise<{
@@ -87,5 +93,10 @@ export const api = {
   },
   search: {
     get: (q: string): Promise<Drawing[]> => fetchApi(`/search?q=${encodeURIComponent(q)}`),
+  },
+  notifications: {
+    list: (): Promise<Notification[]> => fetchApi('/notifications'),
+    markRead: (id: string): Promise<{ ok: boolean }> => fetchApi(`/notifications/${id}/read`, { method: 'POST' }),
+    markAllRead: (): Promise<{ ok: boolean }> => fetchApi('/notifications/read-all', { method: 'POST' }),
   },
 };

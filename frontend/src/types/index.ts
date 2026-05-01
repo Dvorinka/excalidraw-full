@@ -156,15 +156,18 @@ export interface DrawingAsset {
 // ============================================
 
 export type TemplateScope = 'system' | 'team' | 'personal';
-export type TemplateType = 
-  | 'todo' 
-  | 'kanban' 
-  | 'brainstorm' 
-  | 'flowchart' 
-  | 'meeting-notes' 
+export type TemplateType =
+  | 'todo'
+  | 'kanban'
+  | 'brainstorm'
+  | 'flowchart'
+  | 'meeting-notes'
   | 'architecture'
   | 'mindmap'
   | 'wireframe'
+  | 'retrospective'
+  | 'swot'
+  | 'storymap'
   | 'empty';
 
 export interface Template {

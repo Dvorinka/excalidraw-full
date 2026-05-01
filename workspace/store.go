@@ -586,7 +586,7 @@ func (s *Store) GetDrawing(ctx context.Context, userID, drawingID string) (*Draw
 		u.id, u.name, u.username, u.email, u.avatar_url, u.locale, u.timezone, u.created_at, u.updated_at
 		FROM workspace_drawings d
 		JOIN workspace_users u ON u.id = d.owner_user_id
-		WHERE d.id = ? AND d.deleted_at IS NULL`, drawingID)
+		WHERE d.id = ?`, drawingID)
 	return scanDrawing(row)
 }
 
@@ -731,6 +731,82 @@ func (s *Store) ListTemplates(ctx context.Context, userID, teamID string) ([]Tem
 		templates = append(templates, template)
 	}
 	return templates, rows.Err()
+}
+
+func (s *Store) CreateTemplate(ctx context.Context, userID string, req CreateTemplateRequest) (*Template, error) {
+	teamID := strings.TrimSpace(req.TeamID)
+	if teamID == "" {
+		teamID, _ = s.defaultTeamID(ctx, userID)
+	}
+	if ok, err := s.UserCanAccessTeam(ctx, userID, teamID); err != nil || !ok {
+		return nil, ErrForbidden
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 120 {
+		return nil, fmt.Errorf("template name must be between 1 and 120 characters")
+	}
+
+	if len(req.Snapshot) == 0 || !json.Valid(req.Snapshot) {
+		return nil, fmt.Errorf("snapshot must be valid JSON")
+	}
+
+	now := time.Now().UTC()
+	template := &Template{
+		ID:           newID(),
+		TeamID:       &teamID,
+		Scope:        "team",
+		Type:         "custom",
+		Name:         name,
+		Description:  ptr(strings.TrimSpace(req.Description)),
+		SnapshotPath: fmt.Sprintf("teams/%s/templates/%s.json", teamID, newID()),
+		MetadataJSON: req.Metadata,
+		CreatedBy:    userID,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	metadata, _ := json.Marshal(template.MetadataJSON)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO workspace_templates
+		(id, team_id, scope, type, name, description, snapshot_path, metadata_json, created_by, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		template.ID, template.TeamID, template.Scope, template.Type, template.Name, template.Description,
+		template.SnapshotPath, string(metadata), template.CreatedBy, template.CreatedAt, template.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.insertActivity(ctx, &userID, &teamID, "template", template.ID, "template_created", map[string]any{"name": template.Name})
+	return template, nil
+}
+
+func (s *Store) DeleteTemplate(ctx context.Context, userID, templateID string) error {
+	var teamID, createdBy string
+	err := s.db.QueryRowContext(ctx, `SELECT team_id, created_by FROM workspace_templates WHERE id = ?`, templateID).Scan(&teamID, &createdBy)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	if ok, err := s.UserCanAccessTeam(ctx, userID, teamID); err != nil || !ok {
+		return ErrForbidden
+	}
+
+	// Only creator or team admin can delete
+	if createdBy != userID {
+		// Check if user is admin
+		var role string
+		err := s.db.QueryRowContext(ctx, `SELECT role FROM workspace_team_memberships WHERE team_id = ? AND user_id = ?`, teamID, userID).Scan(&role)
+		if err != nil || (role != "admin" && role != "owner") {
+			return ErrForbidden
+		}
+	}
+
+	_, err = s.db.ExecContext(ctx, `DELETE FROM workspace_templates WHERE id = ?`, templateID)
+	return err
 }
 
 func (s *Store) ListActivity(ctx context.Context, userID, teamID string, limit int) ([]ActivityEvent, error) {
@@ -1161,6 +1237,86 @@ func uniqueTeamSlug(ctx context.Context, tx *dbpostgres.Tx, base string) string 
 }
 
 var nonSlugChars = regexp.MustCompile(`[^a-z0-9]+`)
+
+// Notifications
+func (s *Store) ListNotifications(ctx context.Context, userID string, limit int) ([]Notification, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id, user_id, type, title, description, resource_type, resource_id, read, metadata_json, created_at
+		FROM workspace_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	notifications := []Notification{}
+	for rows.Next() {
+		var n Notification
+		var metadata string
+		var resourceType sql.NullString
+		var resourceID sql.NullString
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Description, &resourceType, &resourceID, &n.Read, &metadata, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		if resourceType.Valid {
+			n.ResourceType = resourceType.String
+		}
+		if resourceID.Valid {
+			n.ResourceID = resourceID.String
+		}
+		_ = json.Unmarshal([]byte(metadata), &n.MetadataJSON)
+		if n.MetadataJSON == nil {
+			n.MetadataJSON = map[string]any{}
+		}
+		notifications = append(notifications, n)
+	}
+	return notifications, rows.Err()
+}
+
+func (s *Store) MarkNotificationRead(ctx context.Context, userID, notificationID string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE workspace_notifications SET read = TRUE WHERE id = ? AND user_id = ?`, notificationID, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) MarkAllNotificationsRead(ctx context.Context, userID string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE workspace_notifications SET read = TRUE WHERE user_id = ? AND read = FALSE`, userID)
+	return err
+}
+
+func (s *Store) CreateNotification(ctx context.Context, userID, nType, title, description, resourceType, resourceID string, metadata map[string]any) (*Notification, error) {
+	metadataJSON := []byte("{}")
+	if metadata != nil {
+		b, _ := json.Marshal(metadata)
+		metadataJSON = b
+	}
+	now := time.Now().UTC()
+	n := &Notification{
+		ID:           newID(),
+		UserID:       userID,
+		Type:         nType,
+		Title:        title,
+		Description:  description,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Read:         false,
+		MetadataJSON: map[string]any{},
+		CreatedAt:    now,
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO workspace_notifications (id, user_id, type, title, description, resource_type, resource_id, read, metadata_json, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		n.ID, n.UserID, n.Type, n.Title, n.Description, resourceType, resourceID, false, string(metadataJSON), now)
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(metadataJSON, &n.MetadataJSON)
+	return n, nil
+}
 
 func slugify(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))

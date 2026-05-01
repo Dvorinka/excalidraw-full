@@ -12,7 +12,7 @@ export const FileBrowser: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const urlParams = useParams<{ folderId?: string }>();
-  const { drawings, folders, setDrawings, setFolders } = useDrawingStore();
+  const { drawings, folders, setDrawings, setFolders, removeDrawing } = useDrawingStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'updated' | 'created'>('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -36,6 +36,10 @@ export const FileBrowser: React.FC = () => {
 
   // Move state
   const [movingId, setMovingId] = useState<string | null>(null);
+
+  // New drawing name modal state
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newDrawingName, setNewDrawingName] = useState('');
 
   // Modal state
   const [modal, setModal] = useState<{
@@ -118,11 +122,18 @@ export const FileBrowser: React.FC = () => {
     [navigate]
   );
 
-  const handleCreateDrawing = async () => {
+  const handleCreateDrawing = () => {
+    setNewDrawingName('');
+    setShowNameModal(true);
+  };
+
+  const confirmCreateDrawing = async () => {
+    const title = newDrawingName.trim() || 'Untitled Drawing';
     setIsCreating(true);
+    setShowNameModal(false);
     try {
       const newDrawing = await api.drawings.create({
-        title: 'Untitled Drawing',
+        title,
         visibility: 'team',
         folder_id: activeFolderId || null,
       });
@@ -161,7 +172,7 @@ export const FileBrowser: React.FC = () => {
     showModal('confirm', 'Delete Drawing', `Delete "${drawing.title}"? This cannot be undone.`, async () => {
       try {
         await api.drawings.delete(drawing.id);
-        setDrawings(drawings.filter(d => d.id !== drawing.id));
+        removeDrawing(drawing.id);
         setActiveMenu(null);
         setModal(m => ({ ...m, open: false }));
       } catch (err) {
@@ -489,6 +500,36 @@ export const FileBrowser: React.FC = () => {
           )}
         </main>
       </div>
+
+      {showNameModal && (
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="new-drawing-title" onClick={(e) => { if (e.target === e.currentTarget) setShowNameModal(false); }}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3 id="new-drawing-title">New Drawing</h3>
+              <button className={styles.modalClose} onClick={() => setShowNameModal(false)} aria-label="Close">&times;</button>
+            </div>
+            <div className={styles.modalBody}>
+              <label htmlFor="drawing-name">Name</label>
+              <input
+                id="drawing-name"
+                type="text"
+                autoFocus
+                placeholder="Untitled Drawing"
+                value={newDrawingName}
+                onChange={(e) => setNewDrawingName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateDrawing(); if (e.key === 'Escape') setShowNameModal(false); }}
+                className={styles.modalInput}
+              />
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.modalBtnSecondary} onClick={() => setShowNameModal(false)}>Cancel</button>
+              <button className={styles.modalBtnPrimary} onClick={confirmCreateDrawing} disabled={isCreating}>
+                {isCreating ? <Loader2 size={16} className={styles.spinner} /> : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );

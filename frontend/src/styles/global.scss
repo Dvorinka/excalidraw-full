@@ -116,3 +116,23 @@ a {
   background: var(--color-primary-light);
   color: var(--color-primary-darkest);
 }
+
+// ============================================
+// Excalidraw UI Overrides (hand-drawn aesthetic)
+// ============================================
+
+.excalidraw {
+  --border-radius-md: 2px;
+
+  .context-menu {
+    border: 2px solid var(--color-gray-85) !important;
+    border-radius: 2px !important;
+    box-shadow: 3px 3px 0 var(--color-gray-85) !important;
+  }
+
+  .library-menu-items-container {
+    border: 2px solid var(--color-gray-85) !important;
+    border-radius: 2px !important;
+    box-shadow: 3px 3px 0 var(--color-gray-85) !important;
+  }
+}
