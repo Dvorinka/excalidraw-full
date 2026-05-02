@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Save, Check, Loader2, History, ChevronRight, StickyNote, LayoutTemplate, MonitorPlay, X, Plus } from 'lucide-react';
+import { ArrowLeft, Save, Check, Loader2, History, ChevronRight, ChevronLeft, StickyNote, LayoutTemplate, MonitorPlay, X, Plus, Frame } from 'lucide-react';
 import { Button } from '@/components';
 import { BUILTIN_TEMPLATES } from '@/components/TemplatePicker/TemplatePicker';
 import { useThemeStore } from '@/stores';
@@ -99,6 +99,9 @@ export const Editor: React.FC = () => {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDataRef = useRef<string>('');
   const lastToggledCheckboxRef = useRef<string | null>(null);
+  const lastProcessedAddRef = useRef<string | null>(null);
+  const saveDrawingRef = useRef<() => Promise<void>>(async () => {});
+  const isMutatingSceneRef = useRef(false);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
 
   const [showTemplates, setShowTemplates] = useState(false);
@@ -107,6 +110,8 @@ export const Editor: React.FC = () => {
   const [templateName, setTemplateName] = useState('');
   const [templateDesc, setTemplateDesc] = useState('');
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [slides, setSlides] = useState<ExcalidrawElement[]>([]);
 
   // Load drawing data
   useEffect(() => {
@@ -187,6 +192,22 @@ export const Editor: React.FC = () => {
 
   // Handle changes from Excalidraw
   const handleExcalidrawChange = useCallback((elements: readonly ExcalidrawElement[], appState: Record<string, unknown>, files: Record<string, { dataURL: string; mimeType: string }>) => {
+    // Skip mutation processing if we are in the middle of applying a scene mutation
+    // to prevent React error #185 (Maximum update depth exceeded)
+    if (isMutatingSceneRef.current) {
+      currentStateRef.current = {
+        elements: elements as unknown as ExcalidrawElement[],
+        appState: appStateWithoutGrid(appState),
+        files,
+      };
+      setSaveStatus('unsaved');
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        saveDrawingRef.current();
+      }, 2000);
+      return;
+    }
+
     const selectedIds = Object.keys((appState.selectedElementIds as Record<string, boolean> | undefined) || {});
     const selectedEl = selectedIds.length === 1
       ? elements.find((el) => el.id === selectedIds[0] && !el.isDeleted)
@@ -213,11 +234,19 @@ export const Editor: React.FC = () => {
               }
             : el
         ));
-        excalidrawAPI.updateScene({ elements: nextElements as ExcalidrawElement[] });
+        const nextEls = nextElements;
+        const nextAppState = appStateWithoutGrid(appState);
+        const nextFiles = files;
+        isMutatingSceneRef.current = true;
+        // Defer updateScene to prevent synchronous re-trigger of onChange (React error #185)
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: nextEls as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
         currentStateRef.current = {
-          elements: nextElements,
-          appState: appStateWithoutGrid(appState),
-          files,
+          elements: nextEls,
+          appState: nextAppState,
+          files: nextFiles,
         };
         setSaveStatus('unsaved');
         return;
@@ -228,6 +257,10 @@ export const Editor: React.FC = () => {
 
     // Handle "+" add button click
     if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.action === 'add' && excalidrawAPI) {
+      if (lastProcessedAddRef.current === selectedEl.id) {
+        return;
+      }
+      lastProcessedAddRef.current = selectedEl.id;
       const customData = (selectedEl.customData as Record<string, unknown>) || {};
       const role = customData.templateRole as string;
       const btnX = (selectedEl.x as number) || 0;
@@ -264,7 +297,12 @@ export const Editor: React.FC = () => {
             ? { ...el, y: newY + 40, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() }
             : el
         );
-        excalidrawAPI.updateScene({ elements: [...updated, ...newElements] as ExcalidrawElement[] });
+        const merged = [...updated, ...newElements];
+        isMutatingSceneRef.current = true;
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: merged as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
         setSaveStatus('unsaved');
         return;
       }
@@ -299,7 +337,12 @@ export const Editor: React.FC = () => {
             ? { ...el, y: newY + cardH + 10, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() }
             : el
         );
-        excalidrawAPI.updateScene({ elements: [...updated, ...newElements] as ExcalidrawElement[] });
+        const kanbanMerged = [...updated, ...newElements];
+        isMutatingSceneRef.current = true;
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: kanbanMerged as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
         setSaveStatus('unsaved');
         return;
       }
@@ -348,7 +391,12 @@ export const Editor: React.FC = () => {
             ? { ...el, y: newY + nodeH + 10, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() }
             : el
         );
-        excalidrawAPI.updateScene({ elements: [...updated, ...newElements] as ExcalidrawElement[] });
+        const mindmapMerged = [...updated, ...newElements];
+        isMutatingSceneRef.current = true;
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: mindmapMerged as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
         setSaveStatus('unsaved');
         return;
       }
@@ -375,10 +423,17 @@ export const Editor: React.FC = () => {
             ? { ...el, y: newY + 30, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() }
             : el
         );
-        excalidrawAPI.updateScene({ elements: [...updated, ...newElements] as ExcalidrawElement[] });
+        const genericMerged = [...updated, ...newElements];
+        isMutatingSceneRef.current = true;
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: genericMerged as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
         setSaveStatus('unsaved');
         return;
       }
+    } else {
+      lastProcessedAddRef.current = null;
     }
 
     currentStateRef.current = {
@@ -391,45 +446,30 @@ export const Editor: React.FC = () => {
       clearTimeout(saveTimeoutRef.current);
     }
     saveTimeoutRef.current = setTimeout(() => {
-      saveDrawing();
+      saveDrawingRef.current();
     }, 2000);
   }, [excalidrawAPI]);
 
-  // Auto-save functionality
+  // Auto-save: updates drawing snapshot directly without creating a revision
   const saveDrawing = useCallback(async () => {
-    if (!id || !currentStateRef.current || isSaving) return;
-
-    const { elements, appState, files } = currentStateRef.current;
-
+    if (!id || !currentStateRef.current) return;
     const snapshot = {
       type: 'excalidraw',
       version: 2,
       source: window.location.hostname,
-      elements,
-      appState: {
-        viewBackgroundColor: appState.viewBackgroundColor,
-        gridSize: appState.gridSize,
-        gridStep: appState.gridStep,
-        gridModeEnabled: appState.gridModeEnabled,
-        theme: appState.theme,
-        zenModeEnabled: appState.zenModeEnabled,
-        viewModeEnabled: appState.viewModeEnabled,
-        editingGroup: appState.editingGroup,
-        selectedElementIds: appState.selectedElementIds,
-      },
-      files,
+      elements: currentStateRef.current.elements,
+      appState: currentStateRef.current.appState,
+      files: currentStateRef.current.files,
     };
-
     const snapshotJson = JSON.stringify(snapshot);
     if (snapshotJson === lastSavedDataRef.current) {
       setSaveStatus('saved');
       return;
     }
-
     try {
       setIsSaving(true);
       setSaveStatus('saving');
-      await api.revisions.create(id, snapshot, 'Auto-save');
+      await api.drawings.autosave(id, snapshot);
       lastSavedDataRef.current = snapshotJson;
       setSaveStatus('saved');
     } catch (err) {
@@ -438,10 +478,16 @@ export const Editor: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [id, isSaving]);
+  }, [id]);
+
+  // Keep ref in sync with latest saveDrawing closure
+  useEffect(() => {
+    saveDrawingRef.current = saveDrawing;
+  }, [saveDrawing]);
 
   // Remove unused revisions warning by displaying count in UI
-  const revisionCount = revisions.length;
+  const meaningfulRevisions = revisions.filter((r) => r.change_summary !== 'Auto-save');
+  const revisionCount = meaningfulRevisions.length;
 
   // Restore a specific revision
   const handleRestoreRevision = (revision: DrawingRevision) => {
@@ -461,12 +507,40 @@ export const Editor: React.FC = () => {
     }
   };
 
-  // Manual save
+  // Manual save: creates a named revision
   const handleManualSave = async () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
-    await saveDrawing();
+    if (!id || !currentStateRef.current) return;
+    const snapshot = {
+      type: 'excalidraw',
+      version: 2,
+      source: window.location.hostname,
+      elements: currentStateRef.current.elements,
+      appState: currentStateRef.current.appState,
+      files: currentStateRef.current.files,
+    };
+    const snapshotJson = JSON.stringify(snapshot);
+    try {
+      setIsSaving(true);
+      setSaveStatus('saving');
+      // Create a named revision for manual save
+      await api.revisions.create(id, snapshot, 'Manual save');
+      lastSavedDataRef.current = snapshotJson;
+      setSaveStatus('saved');
+      // Refresh revisions list
+      try {
+        const revData = await api.revisions.list(id);
+        setRevisions(revData);
+      } catch (_) { /* ignore */ }
+    } catch (err) {
+      console.error('Failed to save:', err);
+      setSaveStatus('unsaved');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Ctrl+S keyboard shortcut
@@ -523,9 +597,20 @@ export const Editor: React.FC = () => {
     { id: 'wireframe', label: 'Wireframe', description: 'Editable page layout', icon: null },
     { id: 'mindmap', label: 'Mind Map', description: 'Central idea with + branches', icon: null },
     { id: 'brainstorm', label: 'Brainstorm', description: 'Ideas around a topic', icon: null },
+    { id: 'brainstorm-star', label: 'Star Brainstorm', description: 'Radial branches from core', icon: null },
+    { id: 'brainstorm-matrix', label: 'Matrix Brainstorm', description: '2×2 grid for ideas', icon: null },
+    { id: 'brainstorm-freeform', label: 'Freeform Notes', description: 'Scattered sticky notes', icon: null },
+    { id: 'brainstorm-fishbone', label: 'Fishbone Diagram', description: 'Root-cause analysis', icon: null },
+    { id: 'brainstorm-venn', label: 'Venn Diagram', description: 'Compare overlapping sets', icon: null },
+    { id: 'brainstorm-tree', label: 'Tree Diagram', description: 'Hierarchical branching', icon: null },
+    { id: 'brainstorm-converge', label: 'Converge Map', description: 'Ideas into solution', icon: null },
     { id: 'retrospective', label: 'Retrospective', description: 'Went well, improve, actions', icon: null },
     { id: 'swot', label: 'SWOT Analysis', description: 'Strengths, weaknesses, opps, threats', icon: null },
     { id: 'storymap', label: 'User Story Map', description: 'Epics, steps, and stories', icon: null },
+    { id: 'er-diagram', label: 'ER Diagram', description: 'Entity relationship tables', icon: null },
+    { id: 'api-design', label: 'API Design', description: 'REST endpoints and methods', icon: null },
+    { id: 'sitemap', label: 'Site Map', description: 'Website page hierarchy', icon: null },
+    { id: 'user-persona', label: 'User Persona', description: 'Goals, frustrations, behaviors', icon: null },
   ];
 
   useEffect(() => {
@@ -539,6 +624,122 @@ export const Editor: React.FC = () => {
       }
     });
   }, [excalidrawAPI]);
+
+  // Library import from URL hash (#addLibrary=...)
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    const hash = window.location.hash;
+    const match = hash.match(/addLibrary=([^&]+)/);
+    if (match) {
+      const libraryUrl = decodeURIComponent(match[1]);
+      fetch(libraryUrl)
+        .then((r) => r.json())
+        .then((data) => {
+          // Excalidraw library items come in various formats
+          let libraryItems = data.libraryItems || data.library || data;
+          // Normalize to Excalidraw's expected library item format: { id, elements, status }
+          if (Array.isArray(libraryItems)) {
+            libraryItems = libraryItems.map((item: any) => {
+              if (item.libraryItem) {
+                return { id: item.id || item.libraryItem.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.libraryItem.elements || [], status: 'published' };
+              }
+              if (item.data) {
+                return { id: item.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.data.elements || item.elements || [], status: 'published' };
+              }
+              if (item.elements) {
+                return { id: item.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.elements, status: 'published' };
+              }
+              return item;
+            });
+          }
+          // Use the Excalidraw imperative API to add library items
+          try {
+            const api = excalidrawAPI as any;
+            if (api.updateLibraryItems) {
+              api.updateLibraryItems(libraryItems, 'merge');
+            } else if (api.updateScene) {
+              // Fallback: add elements directly to the canvas at center
+              const currentElements = api.getSceneElements?.() || [];
+              const newElements = libraryItems.flatMap((item: any) => item.elements || []);
+              if (newElements.length > 0) {
+                api.updateScene({
+                  elements: [...currentElements, ...newElements] as ExcalidrawElement[],
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('Library import failed:', e);
+          }
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        })
+        .catch((err) => console.error('Failed to load library:', err));
+    }
+  }, [excalidrawAPI]);
+
+  // Build slides: first slide is whole canvas, then each frame is a slide
+  useEffect(() => {
+    if (!presentationMode || !excalidrawAPI) return;
+    const currentElements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
+    const frameElements = currentElements
+      .filter((el: any) => el.type === 'frame')
+      .sort((a: any, b: any) => (a.y - b.y) || (a.x - b.x));
+    const allSlides: ExcalidrawElement[] = [];
+    // Slide 0: whole canvas (represented by a virtual placeholder)
+    if (currentElements.length > 0) {
+      allSlides.push({ id: '__whole_canvas__', type: 'frame', x: 0, y: 0, width: 1, height: 1, name: 'Canvas', isDeleted: false } as any);
+    }
+    // Subsequent slides: frames
+    frameElements.forEach((f: any) => allSlides.push(f));
+    setSlides(allSlides);
+    setSlideIndex(0);
+    window.setTimeout(() => {
+      const api = excalidrawAPI as any;
+      if (allSlides.length > 0 && api.scrollToContent) {
+        if (allSlides[0].id === '__whole_canvas__') {
+          api.zoomToFit?.();
+        } else {
+          api.scrollToContent?.([allSlides[0]], { fitToContent: true, animate: true });
+        }
+      }
+    }, 100);
+  }, [presentationMode, excalidrawAPI]);
+
+  // Presentation keyboard navigation
+  useEffect(() => {
+    if (!presentationMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        setSlideIndex((prev) => Math.min(prev + 1, slides.length - 1));
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        setSlideIndex((prev) => Math.max(prev - 1, 0));
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setSlideIndex(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setSlideIndex(slides.length - 1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [presentationMode, slides.length]);
+
+  // Scroll to current slide when slideIndex changes
+  useEffect(() => {
+    if (!presentationMode || !excalidrawAPI || slides.length === 0) return;
+    const currentSlide = slides[slideIndex];
+    if (!currentSlide) return;
+    const api = excalidrawAPI as any;
+    window.setTimeout(() => {
+      if (currentSlide.id === '__whole_canvas__') {
+        api.zoomToFit?.();
+      } else if (api.scrollToContent) {
+        api.scrollToContent?.([currentSlide], { fitToContent: true, animate: true });
+      }
+    }, 50);
+  }, [slideIndex, slides, presentationMode, excalidrawAPI]);
 
   if (isLoading) {
     return (
@@ -566,7 +767,12 @@ export const Editor: React.FC = () => {
     <div className={styles.container}>
       <div className={`${styles.toolbar} ${presentationMode ? styles.toolbarHidden : ''}`}>
         <div className={styles.left}>
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="sm" onClick={async () => {
+            if (saveStatus === 'unsaved') {
+              await saveDrawingRef.current();
+            }
+            navigate(drawing?.folder_id ? `/folder/${drawing.folder_id}` : '/files');
+          }}>
             <ArrowLeft size={18} />
             {t('editor.back')}
           </Button>
@@ -617,6 +823,68 @@ export const Editor: React.FC = () => {
             aria-label="Toggle templates panel"
           >
             <LayoutTemplate size={16} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (!excalidrawAPI) return;
+              const appState = excalidrawAPI.getAppState?.() || {};
+              const selectedIds = Object.keys((appState.selectedElementIds as Record<string, boolean> | undefined) || {});
+              const elements = excalidrawAPI.getSceneElements?.() || [];
+              const selectedEls = elements.filter((el) => selectedIds.includes(el.id));
+              if (selectedEls.length === 0) {
+                alert('Select elements on canvas to create a slide');
+                return;
+              }
+              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+              selectedEls.forEach((el) => {
+                minX = Math.min(minX, el.x);
+                minY = Math.min(minY, el.y);
+                maxX = Math.max(maxX, el.x + el.width);
+                maxY = Math.max(maxY, el.y + el.height);
+              });
+              const padding = 40;
+              const frameEl = {
+                id: `frame-${Math.random().toString(36).slice(2)}`,
+                type: 'frame',
+                x: minX - padding,
+                y: minY - padding,
+                width: maxX - minX + padding * 2,
+                height: maxY - minY + padding * 2,
+                angle: 0,
+                strokeColor: '#1e1e1e',
+                backgroundColor: 'transparent',
+                fillStyle: 'hachure' as const,
+                strokeWidth: 1,
+                strokeStyle: 'solid' as const,
+                roughness: 1,
+                opacity: 100,
+                groupIds: [],
+                roundness: null,
+                seed: Math.floor(Math.random() * 10000),
+                version: 2,
+                versionNonce: Math.floor(Math.random() * 100000),
+                isDeleted: false,
+                boundElements: [],
+                updated: Date.now(),
+                link: null,
+                locked: false,
+                customData: { templateRole: 'slide' },
+                name: `Slide ${elements.filter((e) => e.type === 'frame').length + 1}`,
+              };
+              isMutatingSceneRef.current = true;
+              excalidrawAPI.updateScene({
+                elements: [...elements, frameEl] as ExcalidrawElement[],
+                appState: { ...appState, selectedElementIds: { [frameEl.id]: true } },
+              });
+              window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+              setSaveStatus('unsaved');
+            }}
+            title="Create slide from selection"
+            aria-label="Create a presentation slide from selected elements"
+          >
+            <Frame size={16} />
           </Button>
           <Button
             variant="ghost"
@@ -673,10 +941,10 @@ export const Editor: React.FC = () => {
               </Button>
             </div>
             <div className={styles.revisionList}>
-              {revisions.length === 0 ? (
+              {meaningfulRevisions.length === 0 ? (
                 <p className={styles.revisionEmpty}>{t('editor.noRevisions')}</p>
               ) : (
-                revisions.map((rev) => (
+                meaningfulRevisions.map((rev) => (
                   <button
                     key={rev.id}
                     className={`${styles.revisionItem} ${selectedRevision === rev.id ? styles.revisionActive : ''}`}
@@ -742,10 +1010,44 @@ export const Editor: React.FC = () => {
         {presentationMode && (
           <div className={styles.presentationOverlay} role="presentation">
             <div className={styles.presentationToolbar}>
-              <span className={styles.presentationLabel}>Presentation Mode — Press Esc to exit</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSlideIndex((prev) => Math.max(prev - 1, 0))}
+                disabled={slideIndex <= 0}
+                aria-label="Previous slide"
+              >
+                <ChevronLeft size={16} />
+              </Button>
+              <span className={styles.presentationLabel}>
+                Slide {slides.length > 0 ? slideIndex + 1 : 0} / {slides.length}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSlideIndex((prev) => Math.min(prev + 1, slides.length - 1))}
+                disabled={slideIndex >= slides.length - 1}
+                aria-label="Next slide"
+              >
+                <ChevronRight size={16} />
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => setPresentationMode(false)} aria-label="Exit presentation">
                 <X size={16} />
               </Button>
+            </div>
+            <div className={styles.presentationSlides}>
+              {slides.map((slide, idx) => (
+                <button
+                  key={slide.id || idx}
+                  className={`${styles.presentationSlideThumb} ${idx === slideIndex ? styles.presentationSlideActive : ''}`}
+                  onClick={() => setSlideIndex(idx)}
+                  aria-label={`Go to slide ${idx + 1}`}
+                  title={idx === 0 ? 'Whole canvas' : (slide as any).name || `Slide ${idx}`}
+                >
+                  <div className={styles.presentationSlideNumber}>{idx + 1}</div>
+                  <div className={styles.presentationSlideName}>{idx === 0 ? 'Canvas' : ((slide as any).name || `Slide ${idx}`)}</div>
+                </button>
+              ))}
             </div>
           </div>
         )}

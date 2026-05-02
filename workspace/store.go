@@ -635,6 +635,47 @@ func (s *Store) UpdateDrawing(ctx context.Context, userID, drawingID string, req
 	return s.GetDrawing(ctx, userID, drawingID)
 }
 
+func (s *Store) AutosaveDrawing(ctx context.Context, userID, drawingID string, snapshot json.RawMessage) error {
+	if err := s.ensureDrawingAccess(ctx, userID, drawingID, "edit"); err != nil {
+		return err
+	}
+	if len(snapshot) == 0 || !json.Valid(snapshot) {
+		return fmt.Errorf("snapshot must be valid JSON")
+	}
+	now := time.Now().UTC()
+	_, err := s.db.ExecContext(ctx, `UPDATE workspace_drawings SET updated_at = ? WHERE id = ?`, now, drawingID)
+	if err != nil {
+		return err
+	}
+	// Upsert the latest revision snapshot directly without creating a new revision entry
+	var existingRevID string
+	var revNumber int
+	err = s.db.QueryRowContext(ctx, `SELECT id, revision_number FROM workspace_drawing_revisions WHERE drawing_id = ? ORDER BY revision_number DESC LIMIT 1`, drawingID).Scan(&existingRevID, &revNumber)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Create initial revision if none exists
+		revID := newID()
+		_, err = s.db.ExecContext(ctx, `INSERT INTO workspace_drawing_revisions
+			(id, drawing_id, revision_number, snapshot_path, snapshot_size, content_hash, snapshot_json, created_by, created_at, change_summary)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			revID, drawingID, 1, fmt.Sprintf("teams/drawings/%s/revisions/1.json", drawingID), int64(len(snapshot)),
+			func() string { sum := sha256.Sum256(snapshot); return hex.EncodeToString(sum[:]) }(),
+			[]byte(snapshot), userID, now, "Auto-save",
+		)
+		if err != nil {
+			return err
+		}
+		_, err = s.db.ExecContext(ctx, `UPDATE workspace_drawings SET latest_revision_id = ?, updated_at = ? WHERE id = ?`, revID, now, drawingID)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	// Update existing latest revision snapshot
+	_, err = s.db.ExecContext(ctx, `UPDATE workspace_drawing_revisions SET snapshot_json = ?, snapshot_size = ?, content_hash = ?, updated_at = ? WHERE id = ?`,
+		[]byte(snapshot), int64(len(snapshot)), func() string { sum := sha256.Sum256(snapshot); return hex.EncodeToString(sum[:]) }(), now, existingRevID)
+	return err
+}
+
 func (s *Store) ArchiveDrawing(ctx context.Context, userID, drawingID string) error {
 	if err := s.ensureDrawingAccess(ctx, userID, drawingID, "edit"); err != nil {
 		return err

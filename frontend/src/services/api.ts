@@ -15,6 +15,7 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   }
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       ...headers,
       ...options?.headers,
@@ -44,6 +45,8 @@ export const api = {
       fetchApi(`/drawings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: string): Promise<{ ok: boolean }> =>
       fetchApi(`/drawings/${id}`, { method: 'DELETE' }),
+    autosave: (id: string, snapshot: object): Promise<{ ok: boolean }> =>
+      fetchApi(`/drawings/${id}/autosave`, { method: 'PATCH', body: JSON.stringify({ snapshot }) }),
   },
   revisions: {
     list: (drawingId: string): Promise<DrawingRevision[]> =>

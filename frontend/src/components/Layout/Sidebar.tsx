@@ -37,13 +37,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
     >
       <div className={styles.sidebarHeader}>
         <div className={styles.logo}>
-          <img
-            src="https://plus.excalidraw.com/images/logo.svg"
-            alt="Excalidraw"
-            className={styles.logoImg}
-            width={120}
-            height={28}
-          />
+          <svg viewBox="0 0 120 28" className={styles.logoImg} aria-label="Excalidraw+">
+            <text x="0" y="22" fontFamily="Virgil, Segoe UI Emoji, sans-serif" fontSize="20" fontWeight="700" fill="#ffffff">Excalidraw</text>
+            <text x="96" y="22" fontFamily="Virgil, Segoe UI Emoji, sans-serif" fontSize="20" fontWeight="700" fill="#ffffff" opacity="0.7">+</text>
+          </svg>
         </div>
         {onClose && (
           <button

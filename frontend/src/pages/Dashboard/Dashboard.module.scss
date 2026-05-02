@@ -85,10 +85,12 @@
   border: 1px solid var(--default-border-color);
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-island);
-  transition: box-shadow 0.15s ease;
+  transition: all 0.2s var(--ease-out);
+  background: var(--island-bg-color);
 
   &:hover {
     box-shadow: var(--shadow-island-stronger);
+    transform: translateY(-2px);
   }
 }
 
@@ -98,7 +100,9 @@
   align-items: flex-start;
   text-align: left;
   padding: var(--space-5);
-  min-height: 150px;
+  min-height: 140px;
+  position: relative;
+  overflow: hidden;
 }
 
 .statTop {
@@ -106,44 +110,55 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 .statIcon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--border-radius-lg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-primary-light);
-  border: 1px solid var(--default-border-color);
-}
-
-.sparkline {
-  width: 100%;
-  height: 28px;
-  margin-top: var(--space-2);
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-gray-20);
+  opacity: 0.9;
 }
 
 .statValue {
-  font-size: var(--text-3xl);
+  font-size: var(--text-2xl);
   font-weight: 700;
   line-height: 1;
   font-family: var(--ui-font);
+  margin-top: var(--space-2);
 }
 
 .statLabel {
   font-size: var(--text-sm);
   color: var(--color-muted);
   margin-top: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.statBarTrack {
+  width: 100%;
+  height: 6px;
+  background: var(--color-gray-20);
+  border-radius: var(--border-radius-full);
+  margin-top: auto;
+  overflow: hidden;
+}
+
+.statBarFill {
+  height: 100%;
+  border-radius: var(--border-radius-full);
+  transition: width 0.6s var(--ease-out);
 }
 
 .progressBarWrap {
   position: relative;
   width: 100%;
   height: 6px;
-  margin-top: var(--space-3);
   border-radius: var(--border-radius-full);
   overflow: hidden;
 }
@@ -326,20 +341,26 @@
 
 .activityItem {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3) 0;
+  padding: var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--color-gray-20);
+  transition: background 0.15s ease;
+  border-radius: var(--border-radius-md);
 
   &:last-child {
     border-bottom: none;
   }
+
+  &:hover {
+    background: var(--color-surface-low);
+  }
 }
 
 .activityAvatar {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--border-radius-lg);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--border-radius-full);
   background: var(--color-primary);
   color: white;
   display: flex;
@@ -348,17 +369,19 @@
   font-size: var(--text-xs);
   font-weight: 600;
   flex-shrink: 0;
-  border: 1px solid var(--default-border-color);
+  border: 2px solid var(--island-bg-color);
   box-shadow: var(--shadow-island);
 }
 
 .activityInfo {
   flex: 1;
+  min-width: 0;
 }
 
 .activityText {
   font-size: var(--text-sm);
   color: var(--color-gray-80);
+  line-height: 1.4;
 }
 
 .activityTime {

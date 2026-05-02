@@ -1,9 +1,9 @@
 import React from 'react';
-import { X, CheckSquare, ListTodo, List, ArrowRight, LayoutTemplate, PenTool, KanbanSquare, MessageSquare, PanelsTopLeft, GitFork, Lightbulb, RotateCcw, Shield, Map, Timer, Layers } from 'lucide-react';
+import { X, CheckSquare, ListTodo, List, ArrowRight, LayoutTemplate, PenTool, KanbanSquare, MessageSquare, PanelsTopLeft, GitFork, Lightbulb, RotateCcw, Shield, Map, Timer, Layers, Database, Code, Globe, UserCircle } from 'lucide-react';
 import { Card } from '@/components';
 import styles from './TemplatePicker.module.scss';
 
-export type PickedTemplate = 'blank' | 'todo' | 'checklist' | 'list' | 'flow' | 'kanban' | 'meeting' | 'wireframe' | 'mindmap' | 'brainstorm' | 'retrospective' | 'swot' | 'storymap' | 'timeline' | 'architecture';
+export type PickedTemplate = 'blank' | 'todo' | 'checklist' | 'list' | 'flow' | 'kanban' | 'meeting' | 'wireframe' | 'mindmap' | 'brainstorm' | 'brainstorm-star' | 'brainstorm-matrix' | 'brainstorm-freeform' | 'brainstorm-fishbone' | 'brainstorm-venn' | 'brainstorm-tree' | 'brainstorm-converge' | 'retrospective' | 'swot' | 'storymap' | 'timeline' | 'architecture' | 'er-diagram' | 'api-design' | 'sitemap' | 'user-persona';
 
 interface TemplatePickerProps {
   isOpen: boolean;
@@ -291,6 +291,167 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(70, 300, 'Notes & connections:', 18),
     makeText(70, 330, '- Write insights here', 16),
   ],
+  'brainstorm-star': [
+    makeText(50, 30, 'Brainstorm — Star', 30),
+    // Central hub
+    makeHandDrawnRect(260, 200, 180, 60),
+    makeText(290, 220, 'Core Idea', 22),
+    // 6 radial branches (top, top-right, bottom-right, bottom, bottom-left, top-left)
+    makeHandDrawnRect(280, 60, 140, 50),
+    makeText(300, 76, 'Branch 1', 18),
+    makeArrow(350, 200, 350, 110),
+    makeHandDrawnRect(480, 140, 140, 50),
+    makeText(500, 156, 'Branch 2', 18),
+    makeArrow(440, 220, 480, 165),
+    makeHandDrawnRect(480, 280, 140, 50),
+    makeText(500, 296, 'Branch 3', 18),
+    makeArrow(440, 240, 480, 305),
+    makeHandDrawnRect(280, 320, 140, 50),
+    makeText(300, 336, 'Branch 4', 18),
+    makeArrow(350, 260, 350, 320),
+    makeHandDrawnRect(60, 280, 140, 50),
+    makeText(80, 296, 'Branch 5', 18),
+    makeArrow(260, 240, 200, 305),
+    makeHandDrawnRect(60, 140, 140, 50),
+    makeText(80, 156, 'Branch 6', 18),
+    makeArrow(260, 220, 200, 165),
+    makeAddButton(50, 400, '+', 'brainstorm-add'),
+    makeText(82, 400, 'Add branch...', 16),
+  ],
+  'brainstorm-matrix': [
+    makeText(50, 30, 'Brainstorm — Matrix', 30),
+    // 2x2 grid
+    makeHandDrawnRect(50, 90, 300, 160),
+    makeText(150, 130, 'Quadrant A', 20),
+    makeText(80, 170, '- Idea 1', 16),
+    makeText(80, 200, '- Idea 2', 16),
+    makeHandDrawnRect(370, 90, 300, 160),
+    makeText(470, 130, 'Quadrant B', 20),
+    makeText(400, 170, '- Idea 1', 16),
+    makeText(400, 200, '- Idea 2', 16),
+    makeHandDrawnRect(50, 270, 300, 160),
+    makeText(150, 310, 'Quadrant C', 20),
+    makeText(80, 350, '- Idea 1', 16),
+    makeText(80, 380, '- Idea 2', 16),
+    makeHandDrawnRect(370, 270, 300, 160),
+    makeText(470, 310, 'Quadrant D', 20),
+    makeText(400, 350, '- Idea 1', 16),
+    makeText(400, 380, '- Idea 2', 16),
+    makeAddButton(50, 450, '+', 'brainstorm-add'),
+    makeText(82, 450, 'Add idea...', 16),
+  ],
+  'brainstorm-freeform': [
+    makeText(50, 30, 'Brainstorm — Freeform', 30),
+    makeText(50, 70, 'Drag sticky notes anywhere!', 16),
+    // Scattered sticky notes
+    makeHandDrawnRect(60, 110, 160, 80),
+    makeText(80, 140, '💡 Idea 1', 18),
+    makeHandDrawnRect(260, 130, 160, 80),
+    makeText(280, 160, '🚀 Idea 2', 18),
+    makeHandDrawnRect(460, 110, 160, 80),
+    makeText(480, 140, '🎯 Idea 3', 18),
+    makeHandDrawnRect(120, 230, 160, 80),
+    makeText(140, 260, '❓ Idea 4', 18),
+    makeHandDrawnRect(340, 250, 160, 80),
+    makeText(360, 280, '✨ Idea 5', 18),
+    makeAddButton(50, 360, '+', 'brainstorm-add'),
+    makeText(82, 360, 'Add note...', 16),
+  ],
+  'brainstorm-fishbone': [
+    makeText(50, 30, 'Brainstorm — Fishbone', 30),
+    // Spine
+    makeArrow(100, 250, 600, 250),
+    // Problem head
+    makeHandDrawnRect(600, 220, 140, 60),
+    makeText(620, 240, 'Problem', 18),
+    // Top branches
+    makeArrow(220, 250, 180, 160),
+    makeHandDrawnRect(120, 110, 160, 50),
+    makeText(140, 128, 'People', 16),
+    makeArrow(380, 250, 340, 160),
+    makeHandDrawnRect(280, 110, 160, 50),
+    makeText(300, 128, 'Process', 16),
+    makeArrow(540, 250, 500, 160),
+    makeHandDrawnRect(440, 110, 160, 50),
+    makeText(460, 128, 'Policy', 16),
+    // Bottom branches
+    makeArrow(280, 250, 240, 340),
+    makeHandDrawnRect(180, 340, 160, 50),
+    makeText(200, 358, 'Place', 16),
+    makeArrow(460, 250, 420, 340),
+    makeHandDrawnRect(360, 340, 160, 50),
+    makeText(380, 358, 'Product', 16),
+    makeAddButton(50, 420, '+', 'brainstorm-add'),
+    makeText(82, 420, 'Add cause...', 16),
+  ],
+  'brainstorm-venn': [
+    makeText(50, 30, 'Brainstorm — Venn', 30),
+    // Three overlapping circles
+    makeHandDrawnRect(120, 120, 160, 160),
+    makeText(170, 130, 'A', 20),
+    makeText(140, 190, 'Set A traits', 14),
+    makeHandDrawnRect(280, 120, 160, 160),
+    makeText(330, 130, 'B', 20),
+    makeText(300, 190, 'Set B traits', 14),
+    makeHandDrawnRect(200, 220, 160, 160),
+    makeText(250, 230, 'C', 20),
+    makeText(220, 290, 'Set C traits', 14),
+    // Center overlap note
+    makeText(245, 190, 'Overlap', 12),
+    makeAddButton(50, 400, '+', 'brainstorm-add'),
+    makeText(82, 400, 'Add set...', 16),
+  ],
+  'brainstorm-tree': [
+    makeText(50, 30, 'Brainstorm — Tree', 30),
+    // Root
+    makeHandDrawnRect(280, 90, 160, 50),
+    makeText(310, 110, 'Root Topic', 18),
+    // Branches
+    makeArrow(360, 140, 200, 200),
+    makeHandDrawnRect(120, 190, 160, 50),
+    makeText(145, 210, 'Branch 1', 16),
+    makeArrow(360, 140, 360, 200),
+    makeHandDrawnRect(280, 190, 160, 50),
+    makeText(305, 210, 'Branch 2', 16),
+    makeArrow(360, 140, 520, 200),
+    makeHandDrawnRect(440, 190, 160, 50),
+    makeText(465, 210, 'Branch 3', 16),
+    // Leaves
+    makeArrow(200, 240, 140, 300),
+    makeHandDrawnRect(60, 290, 140, 40),
+    makeText(85, 305, 'Leaf 1a', 14),
+    makeArrow(200, 240, 260, 300),
+    makeHandDrawnRect(200, 290, 140, 40),
+    makeText(225, 305, 'Leaf 1b', 14),
+    makeArrow(520, 240, 460, 300),
+    makeHandDrawnRect(440, 290, 140, 40),
+    makeText(465, 305, 'Leaf 3a', 14),
+    makeAddButton(50, 360, '+', 'brainstorm-add'),
+    makeText(82, 360, 'Add branch...', 16),
+  ],
+  'brainstorm-converge': [
+    makeText(50, 30, 'Brainstorm — Converge', 30),
+    // Diverging ideas (top)
+    makeHandDrawnRect(80, 90, 140, 50),
+    makeText(105, 110, 'Idea A', 16),
+    makeHandDrawnRect(280, 90, 140, 50),
+    makeText(305, 110, 'Idea B', 16),
+    makeHandDrawnRect(480, 90, 140, 50),
+    makeText(505, 110, 'Idea C', 16),
+    // Converging arrows
+    makeArrow(150, 140, 290, 220),
+    makeArrow(350, 140, 330, 220),
+    makeArrow(550, 140, 370, 220),
+    // Converged outcome
+    makeHandDrawnRect(220, 220, 260, 70),
+    makeText(260, 245, 'Combined Solution', 20),
+    // Next steps
+    makeArrow(350, 290, 350, 350),
+    makeHandDrawnRect(240, 350, 220, 50),
+    makeText(265, 370, 'Action Plan', 16),
+    makeAddButton(50, 430, '+', 'brainstorm-add'),
+    makeText(82, 430, 'Add idea...', 16),
+  ],
   retrospective: [
     makeText(50, 30, 'Retrospective', 30),
     // Went Well
@@ -421,6 +582,84 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeAddButton(300, 290, '+', 'architecture-add'),
     makeText(332, 290, 'Add component...', 14),
   ],
+  'er-diagram': [
+    makeText(50, 30, 'ER Diagram', 30),
+    // User entity
+    makeHandDrawnRect(50, 90, 160, 120),
+    makeText(70, 110, 'User', 18),
+    makeText(70, 140, 'id: PK', 14),
+    makeText(70, 164, 'email: string', 14),
+    makeText(70, 188, 'name: string', 14),
+    // Relationship line
+    makeArrow(210, 150, 270, 150),
+    makeText(220, 130, '1:N', 12),
+    // Order entity
+    makeHandDrawnRect(270, 90, 160, 120),
+    makeText(290, 110, 'Order', 18),
+    makeText(290, 140, 'id: PK', 14),
+    makeText(290, 164, 'user_id: FK', 14),
+    makeText(290, 188, 'total: number', 14),
+  ],
+  'api-design': [
+    makeText(50, 30, 'API Design', 30),
+    makeHandDrawnRect(50, 90, 600, 50),
+    makeText(70, 110, 'GET    /users          → List users', 16),
+    makeHandDrawnRect(50, 150, 600, 50),
+    makeText(70, 170, 'POST   /users          → Create user', 16),
+    makeHandDrawnRect(50, 210, 600, 50),
+    makeText(70, 230, 'GET    /users/:id      → Get user', 16),
+    makeHandDrawnRect(50, 270, 600, 50),
+    makeText(70, 290, 'PATCH  /users/:id      → Update user', 16),
+    makeHandDrawnRect(50, 330, 600, 50),
+    makeText(70, 350, 'DELETE /users/:id      → Delete user', 16),
+    makeAddButton(50, 400, '+', 'api-add'),
+    makeText(82, 400, 'Add endpoint...', 14),
+  ],
+  'sitemap': [
+    makeText(50, 30, 'Site Map', 30),
+    // Home
+    makeHandDrawnRect(280, 90, 140, 50),
+    makeText(320, 112, 'Home', 18),
+    // Pages below
+    makeHandDrawnRect(50, 180, 140, 50),
+    makeText(75, 202, 'Products', 16),
+    makeHandDrawnRect(220, 180, 140, 50),
+    makeText(250, 202, 'Pricing', 16),
+    makeHandDrawnRect(390, 180, 140, 50),
+    makeText(420, 202, 'About', 16),
+    makeHandDrawnRect(560, 180, 140, 50),
+    makeText(585, 202, 'Contact', 16),
+    // Connections
+    makeArrow(350, 140, 120, 180),
+    makeArrow(350, 140, 290, 180),
+    makeArrow(350, 140, 460, 180),
+    makeArrow(350, 140, 630, 180),
+    makeAddButton(50, 260, '+', 'sitemap-add'),
+    makeText(82, 260, 'Add page...', 14),
+  ],
+  'user-persona': [
+    makeText(50, 30, 'User Persona', 30),
+    // Name & role
+    makeHandDrawnRect(50, 90, 300, 70),
+    makeText(70, 112, 'Name: Alex, 32, Designer', 18),
+    // Goals
+    makeHandDrawnRect(50, 180, 300, 130),
+    makeText(70, 200, 'Goals 🎯', 18),
+    makeText(70, 230, '- Save time on workflows', 14),
+    makeText(70, 254, '- Collaborate easily', 14),
+    // Frustrations
+    makeHandDrawnRect(370, 90, 300, 220),
+    makeText(390, 112, 'Frustrations 😤', 18),
+    makeText(390, 142, '- Too many tools', 14),
+    makeText(390, 166, '- Slow feedback loops', 14),
+    makeText(390, 190, '- Hard to share ideas', 14),
+    makeText(390, 214, '- No single source of truth', 14),
+    // Behaviors
+    makeHandDrawnRect(50, 330, 620, 70),
+    makeText(70, 352, 'Behaviors: Uses Figma, Slack, Notion. Prefers visual tools.', 14),
+    makeAddButton(50, 420, '+', 'persona-add'),
+    makeText(82, 420, 'Add trait...', 14),
+  ],
 };
 
 const OPTIONS: TemplateOption[] = [
@@ -434,11 +673,22 @@ const OPTIONS: TemplateOption[] = [
   { id: 'wireframe', label: 'Wireframe', description: 'Editable page layout', icon: PanelsTopLeft, elements: [] },
   { id: 'mindmap', label: 'Mind Map', description: 'Central idea with + branches', icon: GitFork, elements: [] },
   { id: 'brainstorm', label: 'Brainstorm', description: 'Ideas around a central topic', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-star', label: 'Star Brainstorm', description: 'Radial branches from core idea', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-matrix', label: 'Matrix Brainstorm', description: '2×2 grid for categorizing ideas', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-freeform', label: 'Freeform Notes', description: 'Scattered sticky notes layout', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-fishbone', label: 'Fishbone Diagram', description: 'Root-cause analysis with causes', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-venn', label: 'Venn Diagram', description: 'Compare overlapping sets', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-tree', label: 'Tree Diagram', description: 'Hierarchical branching topics', icon: Lightbulb, elements: [] },
+  { id: 'brainstorm-converge', label: 'Converge Map', description: 'Ideas merging into a solution', icon: Lightbulb, elements: [] },
   { id: 'retrospective', label: 'Retrospective', description: 'Went well, improve, actions', icon: RotateCcw, elements: [] },
   { id: 'swot', label: 'SWOT Analysis', description: 'Strengths, weaknesses, opportunities, threats', icon: Shield, elements: [] },
   { id: 'storymap', label: 'User Story Map', description: 'Epics, steps, and stories', icon: Map, elements: [] },
   { id: 'timeline', label: 'Timeline', description: 'Project phases and milestones', icon: Timer, elements: [] },
   { id: 'architecture', label: 'Architecture', description: 'System components and connections', icon: Layers, elements: [] },
+  { id: 'er-diagram', label: 'ER Diagram', description: 'Entity relationship with tables', icon: Database, elements: [] },
+  { id: 'api-design', label: 'API Design', description: 'REST endpoints and methods', icon: Code, elements: [] },
+  { id: 'sitemap', label: 'Site Map', description: 'Website page hierarchy', icon: Globe, elements: [] },
+  { id: 'user-persona', label: 'User Persona', description: 'Goals, frustrations, behaviors', icon: UserCircle, elements: [] },
 ];
 
 export const TemplatePicker: React.FC<TemplatePickerProps> = ({ isOpen, onClose, onSelect }) => {

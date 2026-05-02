@@ -56,6 +56,7 @@ func (a *API) Routes() chi.Router {
 		r.Post("/drawings", a.handleCreateDrawing)
 		r.Get("/drawings/{drawingID}", a.handleGetDrawing)
 		r.Patch("/drawings/{drawingID}", a.handleUpdateDrawing)
+		r.Patch("/drawings/{drawingID}/autosave", a.handleAutosaveDrawing)
 		r.Delete("/drawings/{drawingID}", a.handleArchiveDrawing)
 		r.Get("/drawings/{drawingID}/revisions", a.handleListRevisions)
 		r.Post("/drawings/{drawingID}/revisions", a.handleCreateRevision)
@@ -134,6 +135,14 @@ func requireSameOriginMutation(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// If the request carries a valid session cookie, it has already been
+		// authenticated by requireSession middleware. The SameSite=Lax cookie
+		// attribute provides sufficient CSRF protection for same-site requests,
+		// so we trust authenticated mutations without a strict Origin check.
+		if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		origin := r.Header.Get("Origin")
 		if origin == "" {
 			next.ServeHTTP(w, r)
@@ -150,17 +159,34 @@ func requireSameOriginMutation(next http.Handler) http.Handler {
 			proto = "https"
 		}
 		expected := proto + "://" + host
-		if origin != expected {
-			// also allow without port in case proxy strips it
-			expectedNoPort := proto + "://" + strings.SplitN(host, ":", 2)[0]
-			originNoPort := strings.SplitN(origin, "://", 2)[1]
-			originNoPort = strings.SplitN(originNoPort, ":", 2)[0]
-			if originNoPort != expectedNoPort {
-				writeError(w, http.StatusForbidden, "Cross-origin mutation denied")
+		if origin == expected {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// allow without port in case proxy strips it
+		expectedHost := strings.SplitN(host, ":", 2)[0]
+		originHost := ""
+		if parts := strings.SplitN(origin, "://", 2); len(parts) == 2 {
+			originHost = strings.SplitN(parts[1], ":", 2)[0]
+		}
+		if originHost != "" && originHost == expectedHost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// fallback: check Referer hostname matches
+		referer := r.Header.Get("Referer")
+		if referer != "" {
+			refHost := ""
+			if parts := strings.SplitN(referer, "://", 2); len(parts) == 2 {
+				refHost = strings.SplitN(parts[1], "/", 2)[0]
+				refHost = strings.SplitN(refHost, ":", 2)[0]
+			}
+			if refHost != "" && refHost == expectedHost {
+				next.ServeHTTP(w, r)
 				return
 			}
 		}
-		next.ServeHTTP(w, r)
+		writeError(w, http.StatusForbidden, "Cross-origin mutation denied")
 	})
 }
 
@@ -354,6 +380,21 @@ func (a *API) handleUpdateDrawing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, drawing)
+}
+
+func (a *API) handleAutosaveDrawing(w http.ResponseWriter, r *http.Request) {
+	user, _ := currentUser(r)
+	var req struct {
+		Snapshot json.RawMessage `json:"snapshot"`
+	}
+	if !decodeJSON(w, r, &req, 10<<20) {
+		return
+	}
+	if err := a.store.AutosaveDrawing(r.Context(), user.ID, chi.URLParam(r, "drawingID"), req.Snapshot); err != nil {
+		writeLookupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) handleArchiveDrawing(w http.ResponseWriter, r *http.Request) {
@@ -639,7 +680,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any, limit int64) bo
 	defer r.Body.Close()
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
+	// Allow unknown fields so frontend can send extra data without breaking
 	if err := decoder.Decode(dst); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return false

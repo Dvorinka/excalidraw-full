@@ -9,43 +9,15 @@ import styles from './Dashboard.module.scss';
 
 const ACTIVITY_LIMIT = 5;
 
-const ProgressBar: React.FC<{ value: number; max: number; color?: string }> = ({ value, max, color = '#6965db' }) => {
+const StatBar: React.FC<{ value: number; max: number; color: string }> = ({ value, max, color }) => {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
-    <div className={styles.progressBarWrap} aria-hidden="true">
-      <div className={styles.progressBarBg} />
-      <div className={styles.progressBarFill} style={{ width: `${pct}%`, background: color }} />
-    </div>
-  );
-};
-
-const MiniSparkline: React.FC<{ data: number[]; color?: string }> = ({ data, color = '#6965db' }) => {
-  if (!data.length) return null;
-  const w = 140;
-  const h = 40;
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
-  const stepX = w / (data.length - 1 || 1);
-
-  const points = data.map((v, i) => {
-    const x = i * stepX;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <svg className={styles.sparkline} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <polyline
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-        opacity="0.5"
+    <div className={styles.statBarTrack} aria-hidden="true">
+      <div
+        className={styles.statBarFill}
+        style={{ width: `${pct}%`, backgroundColor: color }}
       />
-    </svg>
+    </div>
   );
 };
 
@@ -113,13 +85,6 @@ export const Dashboard: React.FC = () => {
   const storageMax = Math.max(Number(statsData.storage_bytes), 1024 * 1024);
 
   const statColors = ['#6965db', '#339af0', '#40c057', '#fcc419', '#ff6b6b'];
-  const sparkData = [
-    [2, 4, 3, 8, 5, 9, statsData.drawings],
-    [1, 2, 3, 3, 4, 5, statsData.projects + statsData.folders],
-    [1, 1, 1, 1, 2, 2, statsData.teams],
-    [5, 8, 12, 15, 20, 25, statsData.revisions],
-    [1024, 2048, 4096, 8192, 16384, 32768, Number(statsData.storage_bytes)],
-  ];
 
   const stats = [
     { label: t('dashboard.stats.drawings'), value: statsData.drawings, chartValue: statsData.drawings, max: maxStat, icon: FileText, color: statColors[0] },
@@ -172,18 +137,17 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className={styles.statsGrid}>
-        {stats.map((stat, idx) => (
+        {stats.map((stat) => (
           <Card key={stat.label} className={styles.statCardWrapper}>
             <CardContent className={styles.statCard}>
               <div className={styles.statTop}>
                 <div className={styles.statIcon} style={{ color: stat.color, borderColor: stat.color }}>
                   <stat.icon size={22} />
                 </div>
-                <ProgressBar value={stat.chartValue} max={stat.max} color={stat.color} />
               </div>
               <div className={styles.statValue} style={{ color: stat.color }}>{stat.value}</div>
               <div className={styles.statLabel}>{stat.label}</div>
-              <MiniSparkline data={sparkData[idx]} color={stat.color} />
+              <StatBar value={stat.chartValue} max={stat.max} color={stat.color} />
             </CardContent>
           </Card>
         ))}
