@@ -41,10 +41,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
             src="https://plus.excalidraw.com/images/logo.svg"
             alt="Excalidraw"
             className={styles.logoImg}
-            width={28}
+            width={120}
             height={28}
           />
-          <span className={styles.logoText}>Excalidraw</span>
         </div>
         {onClose && (
           <button

@@ -122,17 +122,17 @@ a {
 // ============================================
 
 .excalidraw {
-  --border-radius-md: 2px;
+  --border-radius-md: var(--border-radius-lg);
 
   .context-menu {
-    border: 2px solid var(--color-gray-85) !important;
-    border-radius: 2px !important;
-    box-shadow: 3px 3px 0 var(--color-gray-85) !important;
+    border: 1px solid var(--default-border-color) !important;
+    border-radius: var(--border-radius-lg) !important;
+    box-shadow: var(--shadow-island) !important;
   }
 
   .library-menu-items-container {
-    border: 2px solid var(--color-gray-85) !important;
-    border-radius: 2px !important;
-    box-shadow: 3px 3px 0 var(--color-gray-85) !important;
+    border: 1px solid var(--default-border-color) !important;
+    border-radius: var(--border-radius-lg) !important;
+    box-shadow: var(--shadow-island) !important;
   }
 }

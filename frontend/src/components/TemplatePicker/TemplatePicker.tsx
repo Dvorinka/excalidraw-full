@@ -21,7 +21,7 @@ interface TemplateOption {
   elements: RawElement[];
 }
 
-function makeHandDrawnRect(x: number, y: number, w: number, h: number, text?: string, groupId?: string) {
+function makeHandDrawnRect(x: number, y: number, w: number, h: number, groupId?: string) {
   return {
     id: `el-${Math.random().toString(36).slice(2)}`,
     type: 'rectangle',
@@ -41,14 +41,14 @@ function makeHandDrawnRect(x: number, y: number, w: number, h: number, text?: st
     version: 2,
     versionNonce: Math.floor(Math.random() * 100000),
     isDeleted: false,
-    boundElements: text ? [{ id: `txt-${Math.random().toString(36).slice(2)}`, type: 'text' }] : [],
+    boundElements: [],
     updated: Date.now(),
     link: null,
     locked: false,
   };
 }
 
-function makeText(x: number, y: number, text: string, fontSize = 20) {
+function makeText(x: number, y: number, text: string, fontSize = 20, groupId?: string) {
   return {
     id: `txt-${Math.random().toString(36).slice(2)}`,
     type: 'text',
@@ -61,7 +61,7 @@ function makeText(x: number, y: number, text: string, fontSize = 20) {
     strokeStyle: 'solid',
     roughness: 1,
     opacity: 100,
-    groupIds: [],
+    groupIds: groupId ? [groupId] : [],
     frameId: null,
     roundness: null,
     seed: Math.floor(Math.random() * 10000),
@@ -77,7 +77,7 @@ function makeText(x: number, y: number, text: string, fontSize = 20) {
     fontFamily: 1,
     textAlign: 'left',
     verticalAlign: 'top',
-    baseline: 18,
+    baseline: Math.round(fontSize * 0.7),
     containerId: null,
     originalText: text,
     lineHeight: 1.25,
@@ -208,14 +208,14 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(285, 120, 'Doing', 20),
     makeText(495, 120, 'Done', 20),
     // Card 1 - grouped
-    makeHandDrawnRect(70, 170, 140, 70, undefined, 'card1'),
-    makeText(85, 190, 'User research', 16),
+    makeHandDrawnRect(70, 170, 140, 70, 'card1'),
+    makeText(85, 190, 'User research', 16, 'card1'),
     // Card 2 - grouped
-    makeHandDrawnRect(280, 170, 140, 70, undefined, 'card2'),
-    makeText(295, 190, 'Sketch flow', 16),
+    makeHandDrawnRect(280, 170, 140, 70, 'card2'),
+    makeText(295, 190, 'Sketch flow', 16, 'card2'),
     // Card 3 - grouped
-    makeHandDrawnRect(490, 170, 140, 70, undefined, 'card3'),
-    makeText(505, 190, 'Project brief', 16),
+    makeHandDrawnRect(490, 170, 140, 70, 'card3'),
+    makeText(505, 190, 'Project brief', 16, 'card3'),
     // Add card buttons per column
     makeAddButton(110, 380, '+', 'kanban-add-backlog'),
     makeAddButton(320, 380, '+', 'kanban-add-doing'),
@@ -374,13 +374,13 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(50, 30, 'Project Timeline', 30),
     makeHandDrawnRect(50, 90, 600, 4),
     // Milestones
-    makeHandDrawnRect(80, 70, 20, 44, undefined, 'milestone-1'),
+    makeHandDrawnRect(80, 70, 20, 44, 'milestone-1'),
     makeText(60, 125, 'Q1 Kickoff', 14),
-    makeHandDrawnRect(220, 70, 20, 44, undefined, 'milestone-2'),
+    makeHandDrawnRect(220, 70, 20, 44, 'milestone-2'),
     makeText(200, 125, 'Design', 14),
-    makeHandDrawnRect(360, 70, 20, 44, undefined, 'milestone-3'),
+    makeHandDrawnRect(360, 70, 20, 44, 'milestone-3'),
     makeText(340, 125, 'Build', 14),
-    makeHandDrawnRect(500, 70, 20, 44, undefined, 'milestone-4'),
+    makeHandDrawnRect(500, 70, 20, 44, 'milestone-4'),
     makeText(480, 125, 'Launch', 14),
     // Tasks below timeline
     makeHandDrawnRect(50, 170, 130, 50),

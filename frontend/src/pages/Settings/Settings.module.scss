@@ -9,17 +9,16 @@
   margin-bottom: var(--space-8);
   padding: var(--space-5);
   background: var(--island-bg-color);
-  border: 2px solid var(--color-gray-85);
-  border-radius: 2px;
-  box-shadow: 4px 4px 0 var(--color-gray-85);
-  transform: rotate(0.1deg);
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-island-stronger);
 
   h1 {
     font-size: var(--text-3xl);
     font-weight: 700;
     color: var(--color-gray-85);
     margin-bottom: var(--space-2);
-    font-family: 'Georgia', serif;
+    font-family: var(--ui-font);
   }
 }
 
@@ -45,10 +44,10 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-radius: 2px;
+  border-radius: var(--border-radius-lg);
   color: var(--color-gray-70);
   background: none;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   cursor: pointer;
   font-size: var(--text-sm);
   transition: all var(--duration-fast) var(--ease-out);
@@ -57,17 +56,14 @@
   &:hover {
     background: var(--color-surface-low);
     color: var(--color-on-surface);
-    border-color: var(--color-gray-30);
-    transform: rotate(-0.2deg);
+    border-color: var(--default-border-color);
   }
 
   &.active {
     background: var(--color-surface-primary-container);
     color: var(--color-primary-darkest);
     font-weight: 600;
-    border-color: var(--color-gray-85);
-    box-shadow: 2px 2px 0 var(--color-gray-85);
-    transform: rotate(-0.1deg);
+    border-color: var(--color-primary);
   }
 }
 
@@ -96,8 +92,8 @@
   font-size: var(--text-2xl);
   font-weight: 700;
   overflow: hidden;
-  border: 2px solid var(--color-gray-85);
-  box-shadow: 3px 3px 0 var(--color-gray-85);
+  border: 1px solid var(--default-border-color);
+  box-shadow: var(--shadow-island);
 
   img {
     width: 100%;
@@ -151,26 +147,24 @@
 
 .themeOption {
   padding: var(--space-2) var(--space-4);
-  border: 2px solid var(--color-gray-30);
-  border-radius: 2px;
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
   background: var(--island-bg-color);
   color: var(--color-gray-70);
   font-size: var(--text-sm);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
-  box-shadow: 2px 2px 0 var(--color-gray-30);
+  box-shadow: var(--shadow-island);
 
   &:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
-    transform: translate(-1px, -1px);
-    box-shadow: 3px 3px 0 var(--color-primary);
+    box-shadow: var(--shadow-island-stronger);
   }
 
   &.active {
     background: var(--color-primary);
-    border-color: var(--color-gray-85);
+    border-color: var(--color-primary);
     color: white;
-    box-shadow: 2px 2px 0 var(--color-gray-85);
   }
 }

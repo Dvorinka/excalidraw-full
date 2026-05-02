@@ -34,8 +34,15 @@ interface EditorState {
 function prepareElementsForImport(sourceElements: LooseElement[], offsetX: number, offsetY: number): LooseElement[] {
   if (!sourceElements || !sourceElements.length) return [];
   const idMap = new Map<string, string>();
+  const groupIdMap = new Map<string, string>();
   sourceElements.forEach((el) => {
     idMap.set(el.id as string, `${el.type}-${Math.random().toString(36).slice(2, 9)}`);
+    const gids = ((el as { groupIds?: string[] }).groupIds) || [];
+    gids.forEach((gid) => {
+      if (!groupIdMap.has(gid)) {
+        groupIdMap.set(gid, `group-${Math.random().toString(36).slice(2, 9)}`);
+      }
+    });
   });
   return sourceElements.map((el) => {
     const newEl: LooseElement = { ...el };
@@ -54,6 +61,10 @@ function prepareElementsForImport(sourceElements: LooseElement[], offsetX: numbe
     }
     if (newEl.containerId && idMap.has(newEl.containerId as string)) {
       newEl.containerId = idMap.get(newEl.containerId as string);
+    }
+    const gids = (newEl as { groupIds?: string[] }).groupIds;
+    if (gids && gids.length) {
+      (newEl as { groupIds?: string[] }).groupIds = gids.map((gid) => groupIdMap.get(gid) || gid);
     }
     return newEl;
   });

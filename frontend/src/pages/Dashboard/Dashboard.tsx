@@ -9,51 +9,13 @@ import styles from './Dashboard.module.scss';
 
 const ACTIVITY_LIMIT = 5;
 
-const HandDrawnChart: React.FC<{ value: number; max: number; color?: string }> = ({ value, max, color = '#6965db' }) => {
+const ProgressBar: React.FC<{ value: number; max: number; color?: string }> = ({ value, max, color = '#6965db' }) => {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  const w = 120;
-  const h = 60;
-  const pad = 6;
-  const barW = ((w - pad * 2) * pct) / 100;
-  const roughness = 1.2;
-
-  const r = () => (Math.random() - 0.5) * roughness;
-
   return (
-    <svg className={styles.handChart} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path
-        d={`M${pad + r()},${pad + r()} L${w - pad + r()},${pad + r()} L${w - pad + r()},${h - pad + r()} L${pad + r()},${h - pad + r()} Z`}
-        fill="none"
-        stroke="var(--color-gray-40)"
-        strokeWidth="1"
-        strokeLinecap="round"
-      />
-      {pct > 0 && (
-        <path
-          d={`M${pad + r()},${h - pad + r()} L${pad + r()},${pad + r()} L${pad + barW + r()},${pad + r()} L${pad + barW + r()},${h - pad + r()} Z`}
-          fill={color}
-          stroke={color}
-          strokeWidth="1"
-          opacity="0.35"
-          strokeLinecap="round"
-        />
-      )}
-      <path
-        d={`M${pad + r()},${h - pad + r()} L${pad + barW + r()},${h - pad + r()}`}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d={`M${pad + r()},${pad + r()} L${pad + barW + r()},${pad + r()}`}
-        fill="none"
-        stroke={color}
-        strokeWidth="1"
-        strokeLinecap="round"
-        opacity="0.5"
-      />
-    </svg>
+    <div className={styles.progressBarWrap} aria-hidden="true">
+      <div className={styles.progressBarBg} />
+      <div className={styles.progressBarFill} style={{ width: `${pct}%`, background: color }} />
+    </div>
   );
 };
 
@@ -69,7 +31,7 @@ const MiniSparkline: React.FC<{ data: number[]; color?: string }> = ({ data, col
   const points = data.map((v, i) => {
     const x = i * stepX;
     const y = h - ((v - min) / range) * (h - 4) - 2;
-    return `${x + (Math.random() - 0.5) * 0.8},${y + (Math.random() - 0.5) * 0.8}`;
+    return `${x},${y}`;
   }).join(' ');
 
   return (
@@ -81,13 +43,8 @@ const MiniSparkline: React.FC<{ data: number[]; color?: string }> = ({ data, col
         strokeLinecap="round"
         strokeLinejoin="round"
         points={points}
-        opacity="0.7"
+        opacity="0.5"
       />
-      {data.map((v, i) => {
-        const x = i * stepX;
-        const y = h - ((v - min) / range) * (h - 4) - 2;
-        return <circle key={i} cx={x} cy={y} r="2" fill={color} opacity="0.5" />;
-      })}
     </svg>
   );
 };
@@ -98,8 +55,6 @@ export const Dashboard: React.FC = () => {
   const { recentDrawings, setRecentDrawings, activity, setActivity } = useDrawingStore();
   const { user } = useAuthStore();
   const [isCreating, setIsCreating] = useState(false);
-  const [showNameModal, setShowNameModal] = useState(false);
-  const [newDrawingName, setNewDrawingName] = useState('');
   const [statsData, setStatsData] = useState({
     teams: 0,
     members: 0,
@@ -130,18 +85,11 @@ export const Dashboard: React.FC = () => {
     loadData();
   }, [setRecentDrawings, setActivity]);
 
-  const handleCreateDrawing = () => {
-    setNewDrawingName('');
-    setShowNameModal(true);
-  };
-
-  const confirmCreateDrawing = async () => {
-    const title = newDrawingName.trim() || 'Untitled Drawing';
+  const handleCreateDrawing = async () => {
     setIsCreating(true);
-    setShowNameModal(false);
     try {
       const newDrawing = await api.drawings.create({
-        title,
+        title: 'Untitled Drawing',
         visibility: 'team',
       });
       setRecentDrawings([newDrawing, ...recentDrawings]);
@@ -231,7 +179,7 @@ export const Dashboard: React.FC = () => {
                 <div className={styles.statIcon} style={{ color: stat.color, borderColor: stat.color }}>
                   <stat.icon size={22} />
                 </div>
-                <HandDrawnChart value={stat.chartValue} max={stat.max} color={stat.color} />
+                <ProgressBar value={stat.chartValue} max={stat.max} color={stat.color} />
               </div>
               <div className={styles.statValue} style={{ color: stat.color }}>{stat.value}</div>
               <div className={styles.statLabel}>{stat.label}</div>
@@ -342,35 +290,6 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {showNameModal && (
-        <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="new-drawing-title" onClick={(e) => { if (e.target === e.currentTarget) setShowNameModal(false); }}>
-          <div className={styles.modal}>
-            <div className={styles.modalHeader}>
-              <h3 id="new-drawing-title">New Drawing</h3>
-              <button className={styles.modalClose} onClick={() => setShowNameModal(false)} aria-label="Close">&times;</button>
-            </div>
-            <div className={styles.modalBody}>
-              <label htmlFor="drawing-name">Name</label>
-              <input
-                id="drawing-name"
-                type="text"
-                autoFocus
-                placeholder="Untitled Drawing"
-                value={newDrawingName}
-                onChange={(e) => setNewDrawingName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateDrawing(); if (e.key === 'Escape') setShowNameModal(false); }}
-                className={styles.modalInput}
-              />
-            </div>
-            <div className={styles.modalFooter}>
-              <button className={styles.modalBtnSecondary} onClick={() => setShowNameModal(false)}>Cancel</button>
-              <button className={styles.modalBtnPrimary} onClick={confirmCreateDrawing} disabled={isCreating}>
-                {isCreating ? <Loader2 size={16} className={styles.spinner} /> : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

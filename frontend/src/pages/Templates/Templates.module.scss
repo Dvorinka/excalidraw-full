@@ -78,15 +78,13 @@
 
 .templateCard {
   overflow: hidden;
-  border: 2px solid var(--color-gray-85);
-  border-radius: 2px;
-  box-shadow: 3px 3px 0 var(--color-gray-85);
-  transform: rotate(0.1deg);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-island);
+  transition: box-shadow 0.15s ease;
 
   &:hover {
-    transform: rotate(0) translate(-1px, -1px);
-    box-shadow: 5px 5px 0 var(--color-gray-85);
+    box-shadow: var(--shadow-island-stronger);
   }
 }
 

@@ -407,18 +407,17 @@
   align-items: center;
   gap: var(--space-3);
   background: var(--island-bg-color);
-  border: 2px solid var(--color-gray-85);
-  border-radius: 2px;
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
   padding: var(--space-2) var(--space-4);
-  box-shadow: 3px 3px 0 var(--color-gray-85);
-  transform: rotate(-0.3deg);
+  box-shadow: var(--shadow-island);
 }
 
 .presentationLabel {
   font-size: var(--text-sm);
   color: var(--color-gray-70);
   font-weight: 500;
-  font-family: 'Georgia', serif;
+  font-family: var(--ui-font);
 }
 
 .modalOverlay {
@@ -433,8 +432,8 @@
 
 .modal {
   background: var(--island-bg-color);
-  border: 2px solid var(--color-gray-85);
-  border-radius: 2px;
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
   box-shadow: var(--modal-shadow);
   width: 420px;
   max-width: 90vw;
