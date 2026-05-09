@@ -13,7 +13,7 @@ import styles from './Editor.module.scss';
 const ExcalidrawWithLibrary = React.lazy(() =>
   import('@excalidraw/excalidraw').then((mod) => {
     const { Excalidraw } = mod;
-    const ExcalidrawWrapper: React.FC<any> = (props) => {
+    const ExcalidrawWrapper: React.FC<ExcalidrawProps> = (props) => {
       return <Excalidraw {...props} />;
     };
     return { default: ExcalidrawWrapper };
@@ -24,6 +24,38 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/types/element/typ
 import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types/types';
 
 type LooseElement = Record<string, unknown>;
+
+// Type definitions for Excalidraw components
+interface ExcalidrawProps {
+  [key: string]: unknown;
+}
+
+interface LibraryItem {
+  id: string;
+  elements: ExcalidrawElement[];
+  status: string;
+}
+
+interface ArrowElement {
+  type: 'arrow';
+  points: number[][];
+}
+
+interface Slide {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  name: string;
+  isDeleted: boolean;
+}
+
+interface AppStateWithScroll {
+  scrollX?: number;
+  scrollY?: number;
+}
 
 interface EditorState {
   elements: ExcalidrawElement[];
@@ -597,7 +629,7 @@ export const Editor: React.FC = () => {
     
     // Auto-recognize links in text elements
     const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
-    const elementsWithLinks = elements.map((el: any) => {
+    const elementsWithLinks = elements.map((el: ExcalidrawElement) => {
       if (el.type === 'text' && el.text && !el.link) {
         const match = el.text.match(urlRegex);
         if (match && match[0]) {
@@ -606,7 +638,7 @@ export const Editor: React.FC = () => {
       }
       return el;
     });
-    if (elementsWithLinks.some((el: any, i: number) => el.link !== (elements as any)[i]?.link) && excalidrawAPI) {
+    if (elementsWithLinks.some((el: ExcalidrawElement, i: number) => el.link !== (elements as ExcalidrawElement[])[i]?.link) && excalidrawAPI) {
       isMutatingSceneRef.current = true;
       setTimeout(() => {
         excalidrawAPI.updateScene({ elements: elementsWithLinks as ExcalidrawElement[] });
@@ -681,42 +713,6 @@ export const Editor: React.FC = () => {
       setSaveStatus('saved');
     } catch (err) {
       console.error('Failed to restore revision:', err);
-    }
-  };
-
-  // Manual save: creates a named revision
-  const handleManualSave = async () => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = null;
-    }
-    if (!id || !currentStateRef.current) return;
-    const snapshot = {
-      type: 'excalidraw',
-      version: 2,
-      source: window.location.hostname,
-      elements: currentStateRef.current.elements,
-      appState: currentStateRef.current.appState,
-      files: currentStateRef.current.files,
-    };
-    const snapshotJson = JSON.stringify(snapshot);
-    try {
-      setIsSaving(true);
-      setSaveStatus('saving');
-      // Create a named revision for manual save
-      await api.revisions.create(id, snapshot, 'Manual save');
-      lastSavedDataRef.current = snapshotJson;
-      setSaveStatus('saved');
-      // Refresh revisions list
-      try {
-        const revData = await api.revisions.list(id);
-        setRevisions(revData);
-      } catch (_) { /* ignore */ }
-    } catch (err) {
-      console.error('Failed to save:', err);
-      setSaveStatus('unsaved');
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -821,18 +817,18 @@ export const Editor: React.FC = () => {
           let libraryItems = data.libraryItems || data.library || data;
           // Normalize to Excalidraw's expected library item format: { id, elements, status }
           if (Array.isArray(libraryItems)) {
-            libraryItems = libraryItems.map((item: any) => {
+            libraryItems = libraryItems.map((item: Record<string, unknown>): LibraryItem => {
               if (item.libraryItem) {
-                return { id: item.id || item.libraryItem.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.libraryItem.elements || [], status: 'published' };
+                return { id: (item.id as string) || (item.libraryItem as Record<string, unknown>).id as string || `item-${Math.random().toString(36).slice(2, 9)}`, elements: (item.libraryItem as Record<string, unknown>).elements as ExcalidrawElement[] || [], status: 'published' };
               }
               if (item.data) {
-                return { id: item.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.data.elements || item.elements || [], status: 'published' };
+                return { id: (item.id as string) || `item-${Math.random().toString(36).slice(2, 9)}`, elements: ((item.data as Record<string, unknown>).elements as ExcalidrawElement[]) || (item.elements as ExcalidrawElement[]) || [], status: 'published' };
               }
               if (item.elements) {
-                return { id: item.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.elements, status: 'published' };
+                return { id: (item.id as string) || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.elements as ExcalidrawElement[], status: 'published' };
               }
-              return item;
-            }).filter((item: any) => item.elements && Array.isArray(item.elements) && item.elements.length > 0);
+              return item as unknown as LibraryItem;
+            }).filter((item: LibraryItem) => item.elements && Array.isArray(item.elements) && item.elements.length > 0);
           }
           // Validate libraryItems is a valid array before proceeding
           if (!Array.isArray(libraryItems) || libraryItems.length === 0) {
@@ -848,7 +844,7 @@ export const Editor: React.FC = () => {
             } else if (api.updateScene) {
               // Fallback: add elements directly to the canvas at center
               const currentElements = api.getSceneElements?.() || [];
-              const newElements = libraryItems.flatMap((item: any) => item.elements || []);
+              const newElements = libraryItems.flatMap((item: LibraryItem) => item.elements || []);
               if (newElements.length > 0) {
                 api.updateScene({
                   elements: [...currentElements, ...newElements] as ExcalidrawElement[],
@@ -886,17 +882,17 @@ export const Editor: React.FC = () => {
       if (isDrawing && activeTool.type === 'arrow') {
         isDrawing = false;
         const elements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
-        const lastArrow = elements.find((el: any) => el.type === 'arrow' && el.id !== lastArrowId);
-        
+        const lastArrow = elements.find((el: ExcalidrawElement): el is ExcalidrawElement & ArrowElement => el.type === 'arrow' && el.id !== lastArrowId);
+
         if (lastArrow) {
           lastArrowId = lastArrow.id;
           // Get the end point of the last arrow
-          const points = (lastArrow as any).points || [];
+          const points = (lastArrow as ArrowElement).points || [];
           if (points.length >= 2) {
             // Switch back to arrow tool to continue drawing
             window.setTimeout(() => {
               if (notEndingArrow && excalidrawAPI) {
-                (excalidrawAPI as any).setActiveTool?.({ 
+                (excalidrawAPI as any).setActiveTool?.({
                   type: 'arrow',
                   nativePenSDK: undefined,
                 });
@@ -928,7 +924,7 @@ export const Editor: React.FC = () => {
         }
       }
     };
-    
+
     const handleContextMenu = () => {
       if (notEndingArrow) {
         setNotEndingArrow(false);
@@ -952,16 +948,16 @@ export const Editor: React.FC = () => {
     if (!presentationMode || !excalidrawAPI) return;
     const currentElements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
     const frameElements = currentElements
-      .filter((el: any) => el.type === 'frame')
-      .sort((a: any, b: any) => (a.y - b.y) || (a.x - b.x));
-    const allSlides: ExcalidrawElement[] = [];
+      .filter((el: ExcalidrawElement): el is ExcalidrawElement & Slide => el.type === 'frame')
+      .sort((a: ExcalidrawElement & Slide, b: ExcalidrawElement & Slide) => (a.y - b.y) || (a.x - b.x));
+    const allSlides: (ExcalidrawElement & Slide)[] = [];
     // Slide 0: whole canvas (represented by a virtual placeholder)
     if (currentElements.length > 0) {
-      allSlides.push({ id: '__whole_canvas__', type: 'frame', x: 0, y: 0, width: 1, height: 1, name: 'Canvas', isDeleted: false } as any);
+      allSlides.push({ id: '__whole_canvas__', type: 'frame', x: 0, y: 0, width: 1, height: 1, name: 'Canvas', isDeleted: false } as ExcalidrawElement & Slide);
     }
     // Subsequent slides: frames
-    frameElements.forEach((f: any) => allSlides.push(f));
-    setSlides(allSlides);
+    frameElements.forEach((f: ExcalidrawElement & Slide) => allSlides.push(f));
+    setSlides(allSlides as any);
     setSlideIndex(0);
     window.setTimeout(() => {
       const api = excalidrawAPI as any;
@@ -1038,8 +1034,8 @@ export const Editor: React.FC = () => {
     if (!excalidrawAPI) return;
     const currentElements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
     const appState = excalidrawAPI.getAppState?.() || {};
-    const centerX = ((appState as any).scrollX || 200) + 200;
-    const centerY = ((appState as any).scrollY || 200) + 200;
+    const centerX = ((appState as AppStateWithScroll).scrollX || 200) + 200;
+    const centerY = ((appState as AppStateWithScroll).scrollY || 200) + 200;
     const uid = () => `el-${Math.random().toString(36).slice(2)}`;
 
     let newEl: LooseElement;

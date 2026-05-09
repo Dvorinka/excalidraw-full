@@ -27,5 +27,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'excalidraw': ['@excalidraw/excalidraw'],
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['lucide-react', 'clsx'],
+          'i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+          'state': ['zustand'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
   },
 })
