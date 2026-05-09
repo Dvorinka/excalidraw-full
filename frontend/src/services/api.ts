@@ -61,6 +61,12 @@ export const api = {
     list: (): Promise<Folder[]> => fetchApi('/folders'),
     create: (data: object): Promise<Folder> =>
       fetchApi('/folders', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: object): Promise<Folder> =>
+      fetchApi(`/folders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: string): Promise<void> =>
+      fetchApi(`/folders/${id}`, { method: 'DELETE' }),
+    reorder: (folderIds: string[]): Promise<Folder[]> =>
+      fetchApi('/folders/reorder', { method: 'POST', body: JSON.stringify({ folder_ids: folderIds }) }),
   },
   teams: {
     list: (): Promise<Team[]> => fetchApi('/teams'),

@@ -148,6 +148,7 @@
   width: 100%;
   text-align: left;
   font-size: var(--text-sm);
+  position: relative;
 
   &:hover {
     background: var(--color-surface-low);
@@ -162,9 +163,88 @@
     border-color: var(--color-primary);
   }
 
+  &.dragging {
+    opacity: 0.5;
+  }
+
   svg {
     color: var(--color-primary);
     flex-shrink: 0;
+  }
+}
+
+.dragHandle {
+  cursor: grab;
+  color: var(--color-muted);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  
+  .folderItem:hover & {
+    opacity: 1;
+  }
+}
+
+.dragOver {
+  background: var(--color-surface-primary-container);
+  border-color: var(--color-primary);
+  border-radius: var(--border-radius-lg);
+}
+
+.folderMenuBtn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: var(--space-1);
+  cursor: pointer;
+  color: var(--color-muted);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    background: var(--color-surface-low);
+    color: var(--color-on-surface);
+  }
+}
+
+.folderMenu {
+  position: absolute;
+  right: var(--space-2);
+  top: 100%;
+  background: var(--island-bg-color);
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-island);
+  min-width: 140px;
+  z-index: 20;
+  padding: var(--space-1);
+}
+
+.folderMenuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  background: none;
+  border: none;
+  padding: var(--space-2) var(--space-2);
+  cursor: pointer;
+  border-radius: var(--border-radius-md);
+  color: var(--color-on-surface);
+  font-size: var(--text-sm);
+  text-align: left;
+  
+  &:hover {
+    background: var(--color-surface-low);
+  }
+}
+
+.folderMenuDanger {
+  color: var(--color-danger-text);
+  
+  &:hover {
+    background: rgba(224, 49, 49, 0.08);
   }
 }
 

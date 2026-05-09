@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Folder, ChevronRight, Grid, List, MoreVertical, Plus, Loader2, AlertCircle } from 'lucide-react';
+import { Folder, ChevronRight, Grid, List, MoreVertical, Plus, Loader2, AlertCircle, Pencil, Trash2, GripVertical } from 'lucide-react';
 import { Card, Button, Modal } from '@/components';
 import { useDrawingStore } from '@/stores';
 import { api } from '@/services';
-import type { Drawing } from '@/types';
+import type { Drawing, Folder as FolderType } from '@/types';
 import styles from './FileBrowser.module.scss';
 
 export const FileBrowser: React.FC = () => {
@@ -36,6 +36,14 @@ export const FileBrowser: React.FC = () => {
 
   // Move state
   const [movingId, setMovingId] = useState<string | null>(null);
+
+  // Folder menu state
+  const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
+  const folderMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Drag-drop state for folders
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
 
   // New drawing name modal state
   const [showNameModal, setShowNameModal] = useState(false);
@@ -227,6 +235,110 @@ export const FileBrowser: React.FC = () => {
     }
   };
 
+  const handleRenameFolder = async (folder: FolderType) => {
+    const name = renameValue.trim();
+    if (!name || name === folder.name) {
+      setRenamingId(null);
+      return;
+    }
+    try {
+      const updated = await api.folders.update(folder.id, { name });
+      setFolders(folders.map(f => f.id === folder.id ? updated : f));
+      setRenamingId(null);
+      setFolderMenuId(null);
+    } catch (err) {
+      console.error('Failed to rename folder:', err);
+      showModal('alert', 'Error', 'Failed to rename folder. Please try again.');
+    }
+  };
+
+  const handleDeleteFolder = (folder: FolderType) => {
+    const drawingsInFolder = drawings.filter(d => d.folder_id === folder.id);
+    const message = drawingsInFolder.length > 0
+      ? `Delete "${folder.name}" and move its ${drawingsInFolder.length} drawing(s) to root? This cannot be undone.`
+      : `Delete "${folder.name}"? This cannot be undone.`;
+    
+    showModal('confirm', 'Delete Folder', message, async () => {
+      try {
+        // Move drawings to root first
+        for (const drawing of drawingsInFolder) {
+          await api.drawings.update(drawing.id, { folder_id: null });
+        }
+        setDrawings(drawings.map(d => 
+          d.folder_id === folder.id ? { ...d, folder_id: null } : d
+        ));
+        await api.folders.delete(folder.id);
+        setFolders(folders.filter(f => f.id !== folder.id));
+        setFolderMenuId(null);
+        setModal(m => ({ ...m, open: false }));
+        if (activeFolderId === folder.id) {
+          navigate('/files');
+        }
+      } catch (err) {
+        console.error('Failed to delete folder:', err);
+        setModal(m => ({ ...m, open: false }));
+        setTimeout(() => showModal('alert', 'Error', 'Failed to delete folder.'), 100);
+      }
+    });
+  };
+
+  // Drag and drop handlers for folders
+  const handleDragStart = (e: React.DragEvent, folderId: string) => {
+    setDraggedFolderId(folderId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, folderId: string) => {
+    e.preventDefault();
+    if (draggedFolderId && draggedFolderId !== folderId) {
+      setDragOverFolderId(folderId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverFolderId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetFolderId: string) => {
+    e.preventDefault();
+    if (!draggedFolderId || draggedFolderId === targetFolderId) {
+      setDraggedFolderId(null);
+      setDragOverFolderId(null);
+      return;
+    }
+
+    // Reorder: move dragged folder to target position
+    const currentFolders = [...folders];
+    const draggedIndex = currentFolders.findIndex(f => f.id === draggedFolderId);
+    const targetIndex = currentFolders.findIndex(f => f.id === targetFolderId);
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedFolderId(null);
+      setDragOverFolderId(null);
+      return;
+    }
+
+    const [draggedFolder] = currentFolders.splice(draggedIndex, 1);
+    currentFolders.splice(targetIndex, 0, draggedFolder);
+    
+    const newOrder = currentFolders.map(f => f.id);
+    
+    try {
+      const reordered = await api.folders.reorder(newOrder);
+      setFolders(reordered);
+    } catch (err) {
+      console.error('Failed to reorder folders:', err);
+    }
+    
+    setDraggedFolderId(null);
+    setDragOverFolderId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedFolderId(null);
+    setDragOverFolderId(null);
+  };
+
   // Close menu on outside click
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -386,16 +498,81 @@ export const FileBrowser: React.FC = () => {
               </button>
             </li>
             {folders.map((folder) => (
-              <li key={folder.id}>
-                <button
-                  className={`${styles.folderItem} ${activeFolderId === folder.id ? styles.folderActive : ''}`}
-                  onClick={() => handleFolderClick(folder.id)}
-                  aria-current={activeFolderId === folder.id ? 'true' : undefined}
-                  role="treeitem"
-                >
-                  <Folder size={18} aria-hidden="true" />
-                  <span>{folder.name}</span>
-                </button>
+              <li 
+                key={folder.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, folder.id)}
+                onDragOver={(e) => handleDragOver(e, folder.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, folder.id)}
+                onDragEnd={handleDragEnd}
+                className={dragOverFolderId === folder.id ? styles.dragOver : ''}
+              >
+                {renamingId === folder.id ? (
+                  <input
+                    autoFocus
+                    className={styles.renameInput}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameFolder(folder);
+                      if (e.key === 'Escape') setRenamingId(null);
+                    }}
+                    onBlur={() => handleRenameFolder(folder)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <button
+                    className={`${styles.folderItem} ${activeFolderId === folder.id ? styles.folderActive : ''} ${draggedFolderId === folder.id ? styles.dragging : ''}`}
+                    onClick={() => handleFolderClick(folder.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setFolderMenuId(folder.id);
+                    }}
+                    aria-current={activeFolderId === folder.id ? 'true' : undefined}
+                    role="treeitem"
+                  >
+                    <GripVertical size={14} className={styles.dragHandle} aria-hidden="true" />
+                    <Folder size={18} aria-hidden="true" />
+                    <span>{folder.name}</span>
+                    <button
+                      className={styles.folderMenuBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFolderMenuId(folderMenuId === folder.id ? null : folder.id);
+                      }}
+                      aria-label="Folder options"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                  </button>
+                )}
+                {folderMenuId === folder.id && (
+                  <div className={styles.folderMenu} ref={folderMenuRef}>
+                    <button
+                      className={styles.folderMenuItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenamingId(folder.id);
+                        setRenameValue(folder.name);
+                        setFolderMenuId(null);
+                      }}
+                    >
+                      <Pencil size={14} />
+                      Rename
+                    </button>
+                    <button
+                      className={`${styles.folderMenuItem} ${styles.folderMenuDanger}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFolder(folder);
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

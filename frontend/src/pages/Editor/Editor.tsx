@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Save, Check, Loader2, History, ChevronRight, ChevronLeft, StickyNote, LayoutTemplate, MonitorPlay, X, Plus, Frame } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, History, ChevronRight, ChevronLeft, StickyNote, LayoutTemplate, MonitorPlay, X, Plus, Frame } from 'lucide-react';
 import { Button } from '@/components';
 import { BUILTIN_TEMPLATES } from '@/components/TemplatePicker/TemplatePicker';
 import { useThemeStore } from '@/stores';
@@ -112,6 +112,7 @@ export const Editor: React.FC = () => {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [slides, setSlides] = useState<ExcalidrawElement[]>([]);
+  const [notEndingArrow, setNotEndingArrow] = useState(false);
 
   // Load drawing data
   useEffect(() => {
@@ -200,11 +201,15 @@ export const Editor: React.FC = () => {
         appState: appStateWithoutGrid(appState),
         files,
       };
-      setSaveStatus('unsaved');
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        saveDrawingRef.current();
-      }, 2000);
+      // Only mark as unsaved if the data actually differs from last saved
+      const currentJson = JSON.stringify(currentStateRef.current);
+      if (currentJson !== lastSavedDataRef.current) {
+        setSaveStatus('unsaved');
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+          saveDrawingRef.current();
+        }, 2000);
+      }
       return;
     }
 
@@ -255,21 +260,133 @@ export const Editor: React.FC = () => {
       lastToggledCheckboxRef.current = null;
     }
 
-    // Handle "+" add button click
-    if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.action === 'add' && excalidrawAPI) {
+    // Handle correct/incorrect toggle (cycles: empty → correct → incorrect → empty)
+    if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.templateRole === 'correct-incorrect') {
+      if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedEl.id) {
+        lastToggledCheckboxRef.current = selectedEl.id;
+        const currentStatus = ((selectedEl.customData as Record<string, unknown> | undefined)?.status as string) || 'empty';
+        let nextStatus: string;
+        let nextColor: string;
+        let nextFill: 'solid' | 'hachure';
+        if (currentStatus === 'empty') {
+          nextStatus = 'correct';
+          nextColor = '#22c55e';
+          nextFill = 'solid';
+        } else if (currentStatus === 'correct') {
+          nextStatus = 'incorrect';
+          nextColor = '#ef4444';
+          nextFill = 'solid';
+        } else {
+          nextStatus = 'empty';
+          nextColor = '#1e1e1e';
+          nextFill = 'hachure';
+        }
+        const nextElements = elements.map((el) =>
+          el.id === selectedEl.id
+            ? {
+                ...el,
+                backgroundColor: nextStatus === 'empty' ? 'transparent' : nextColor,
+                fillStyle: nextFill,
+                customData: {
+                  ...((el.customData as Record<string, unknown> | undefined) || {}),
+                  status: nextStatus,
+                },
+                version: el.version + 1,
+                versionNonce: Math.floor(Math.random() * 1000000),
+                updated: Date.now(),
+              }
+            : el
+        );
+        const nextEls = nextElements;
+        const nextAppState = appStateWithoutGrid(appState);
+        const nextFiles = files;
+        isMutatingSceneRef.current = true;
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: nextEls as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
+        currentStateRef.current = {
+          elements: nextEls,
+          appState: nextAppState,
+          files: nextFiles,
+        };
+        setSaveStatus('unsaved');
+        return;
+      }
+    }
+
+    // Handle star rating toggle
+    if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.templateRole === 'star-rating') {
+      if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedEl.id) {
+        lastToggledCheckboxRef.current = selectedEl.id;
+        const currentRating = ((selectedEl.customData as Record<string, unknown> | undefined)?.rating as number) || 0;
+        const nextRating = currentRating >= 5 ? 1 : currentRating + 1;
+        const nextElements = elements.map((el) =>
+          el.id === selectedEl.id
+            ? {
+                ...el,
+                customData: {
+                  ...((el.customData as Record<string, unknown> | undefined) || {}),
+                  rating: nextRating,
+                },
+                version: el.version + 1,
+                versionNonce: Math.floor(Math.random() * 1000000),
+                updated: Date.now(),
+              }
+            : el
+        );
+        const nextEls = nextElements;
+        const nextAppState = appStateWithoutGrid(appState);
+        const nextFiles = files;
+        isMutatingSceneRef.current = true;
+        setTimeout(() => {
+          excalidrawAPI.updateScene({ elements: nextEls as ExcalidrawElement[] });
+          window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+        }, 0);
+        currentStateRef.current = {
+          elements: nextEls,
+          appState: nextAppState,
+          files: nextFiles,
+        };
+        setSaveStatus('unsaved');
+        return;
+      }
+    }
+
+    // Handle "+" add button click or "Add task..." text click
+    const customData = (selectedEl?.customData as Record<string, unknown> | undefined);
+    const isAddButton = customData?.action === 'add';
+    const isAddText = customData?.templateRole && typeof customData.templateRole === 'string' && 
+                      (customData.templateRole.startsWith('todo-add') || 
+                       customData.templateRole.startsWith('checklist-add') ||
+                       customData.templateRole.startsWith('list-add') ||
+                       customData.templateRole.startsWith('meeting-add-action'));
+    
+    if (selectedEl && (isAddButton || isAddText) && excalidrawAPI) {
       if (lastProcessedAddRef.current === selectedEl.id) {
         return;
       }
       lastProcessedAddRef.current = selectedEl.id;
-      const customData = (selectedEl.customData as Record<string, unknown>) || {};
-      const role = customData.templateRole as string;
+      const role = customData?.templateRole as string;
       const btnX = (selectedEl.x as number) || 0;
       const btnY = (selectedEl.y as number) || 0;
       const newElements: LooseElement[] = [];
       const uid = () => `el-${Math.random().toString(36).slice(2)}`;
       const tid = () => `txt-${Math.random().toString(36).slice(2)}`;
 
-      if (role.startsWith('todo-add') || role.startsWith('checklist-add')) {
+      if (role?.startsWith('todo-add') || role?.startsWith('checklist-add')) {
+        // Find the associated add button and "Add task..." text to move together
+        const addButtonEl = elements.find(el => 
+          el.type === 'rectangle' && 
+          (el.customData as Record<string, unknown> | undefined)?.templateRole === role
+        );
+        const addTextEl = elements.find(el => 
+          el.type === 'text' && 
+          ((el.text as string)?.toLowerCase().includes('add task') || 
+           (el.text as string)?.toLowerCase().includes('add item') ||
+           (el.text as string)?.toLowerCase().includes('add bullet'))
+        );
+        
         // Add a new checkbox + text row below the button
         const newY = btnY + 30;
         newElements.push({
@@ -291,12 +408,28 @@ export const Editor: React.FC = () => {
           text: 'New task', fontSize: 18, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
           baseline: 16, containerId: null, originalText: 'New task', lineHeight: 1.25,
         });
-        // Move the add button down
-        const updated = elements.map((el) =>
-          el.id === selectedEl.id
-            ? { ...el, y: newY + 40, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() }
-            : el
-        );
+        
+        // Move the add button and "Add task..." text down, plus any notes line for todo
+        const moveDown = newY + 40;
+        const updated = elements.map((el) => {
+          // Move the add button
+          if (addButtonEl && el.id === addButtonEl.id) {
+            return { ...el, y: moveDown, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
+          }
+          // Move the "Add task..." text
+          if (addTextEl && el.id === addTextEl.id) {
+            return { ...el, y: moveDown + 2, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
+          }
+          // Move notes line for todo template (the line after the add button)
+          if (role?.startsWith('todo-add') && el.type === 'rectangle' && (el.width as number) > 400 && (el.height as number) < 5) {
+            return { ...el, y: (el.y as number) + 40, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
+          }
+          // Move notes text for todo template
+          if (role?.startsWith('todo-add') && el.type === 'text' && (el.text as string)?.toLowerCase() === 'notes:') {
+            return { ...el, y: (el.y as number) + 40, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
+          }
+          return el;
+        });
         const merged = [...updated, ...newElements];
         isMutatingSceneRef.current = true;
         setTimeout(() => {
@@ -402,10 +535,23 @@ export const Editor: React.FC = () => {
       }
 
       // Generic add: add a text line below
-      if (role.startsWith('list-add') || role.startsWith('meeting-add') || role.startsWith('flow-add') ||
-          role.startsWith('brainstorm-add') || role.startsWith('retro-add') || role.startsWith('swot-add') ||
-          role.startsWith('storymap-add') || role.startsWith('wireframe-add') || role.startsWith('timeline-add') ||
-          role.startsWith('architecture-add')) {
+      if (role?.startsWith('list-add') || role?.startsWith('meeting-add') || role?.startsWith('flow-add') ||
+          role?.startsWith('brainstorm-add') || role?.startsWith('retro-add') || role?.startsWith('swot-add') ||
+          role?.startsWith('storymap-add') || role?.startsWith('wireframe-add') || role?.startsWith('timeline-add') ||
+          role?.startsWith('architecture-add')) {
+        // Find the associated add text to move together
+        const addButtonEl = elements.find(el => 
+          el.type === 'rectangle' && 
+          (el.customData as Record<string, unknown> | undefined)?.templateRole === role
+        );
+        const addTextEl = elements.find(el => 
+          el.type === 'text' && 
+          ((el.text as string)?.toLowerCase().includes('add') ||
+           (el.text as string)?.toLowerCase().includes('step') ||
+           (el.text as string)?.toLowerCase().includes('bullet') ||
+           (el.text as string)?.toLowerCase().includes('action'))
+        );
+        
         const newY = btnY + 30;
         newElements.push({
           id: tid(), type: 'text', x: btnX + 30, y: newY, width: 150, height: 22,
@@ -414,15 +560,22 @@ export const Editor: React.FC = () => {
           frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
           version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
           boundElements: [], updated: Date.now(), link: null, locked: false,
-          text: role.startsWith('list-add') ? '• New item' : '- New item',
+          text: role?.startsWith('list-add') ? '• New item' : '- New item',
           fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
-          baseline: 14, containerId: null, originalText: role.startsWith('list-add') ? '• New item' : '- New item', lineHeight: 1.25,
+          baseline: 14, containerId: null, originalText: role?.startsWith('list-add') ? '• New item' : '- New item', lineHeight: 1.25,
         });
-        const updated = elements.map((el) =>
-          el.id === selectedEl.id
-            ? { ...el, y: newY + 30, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() }
-            : el
-        );
+        
+        // Move both the add button and the add text
+        const moveDown = newY + 30;
+        const updated = elements.map((el) => {
+          if (addButtonEl && el.id === addButtonEl.id) {
+            return { ...el, y: moveDown, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
+          }
+          if (addTextEl && el.id === addTextEl.id) {
+            return { ...el, y: moveDown + 2, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
+          }
+          return el;
+        });
         const genericMerged = [...updated, ...newElements];
         isMutatingSceneRef.current = true;
         setTimeout(() => {
@@ -441,13 +594,37 @@ export const Editor: React.FC = () => {
       appState: appStateWithoutGrid(appState),
       files,
     };
-    setSaveStatus('unsaved');
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+    
+    // Auto-recognize links in text elements
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
+    const elementsWithLinks = elements.map((el: any) => {
+      if (el.type === 'text' && el.text && !el.link) {
+        const match = el.text.match(urlRegex);
+        if (match && match[0]) {
+          return { ...el, link: match[0], version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000) };
+        }
+      }
+      return el;
+    });
+    if (elementsWithLinks.some((el: any, i: number) => el.link !== (elements as any)[i]?.link) && excalidrawAPI) {
+      isMutatingSceneRef.current = true;
+      setTimeout(() => {
+        excalidrawAPI.updateScene({ elements: elementsWithLinks as ExcalidrawElement[] });
+        window.setTimeout(() => { isMutatingSceneRef.current = false; }, 50);
+      }, 0);
     }
-    saveTimeoutRef.current = setTimeout(() => {
-      saveDrawingRef.current();
-    }, 2000);
+    
+    // Only mark as unsaved if the data actually differs from last saved
+    const currentJson = JSON.stringify(currentStateRef.current);
+    if (currentJson !== lastSavedDataRef.current) {
+      setSaveStatus('unsaved');
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        saveDrawingRef.current();
+      }, 2000);
+    }
   }, [excalidrawAPI]);
 
   // Auto-save: updates drawing snapshot directly without creating a revision
@@ -633,7 +810,12 @@ export const Editor: React.FC = () => {
     if (match) {
       const libraryUrl = decodeURIComponent(match[1]);
       fetch(libraryUrl)
-        .then((r) => r.json())
+        .then((r) => {
+          if (!r.ok) {
+            throw new Error(`HTTP error! status: ${r.status}`);
+          }
+          return r.json();
+        })
         .then((data) => {
           // Excalidraw library items come in various formats
           let libraryItems = data.libraryItems || data.library || data;
@@ -650,7 +832,13 @@ export const Editor: React.FC = () => {
                 return { id: item.id || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.elements, status: 'published' };
               }
               return item;
-            });
+            }).filter((item: any) => item.elements && Array.isArray(item.elements) && item.elements.length > 0);
+          }
+          // Validate libraryItems is a valid array before proceeding
+          if (!Array.isArray(libraryItems) || libraryItems.length === 0) {
+            console.warn('Library import failed: No valid library items found');
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            return;
           }
           // Use the Excalidraw imperative API to add library items
           try {
@@ -672,9 +860,92 @@ export const Editor: React.FC = () => {
           }
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
         })
-        .catch((err) => console.error('Failed to load library:', err));
+        .catch((err) => {
+          console.error('Failed to load library:', err);
+          // Clear the hash even on error to prevent repeated failed attempts
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        });
     }
   }, [excalidrawAPI]);
+
+  // Not-ending arrow mode: auto-continue drawing arrows
+  useEffect(() => {
+    if (!excalidrawAPI || !notEndingArrow) return;
+    
+    let lastArrowId: string | null = null;
+    let isDrawing = false;
+    
+    const handlePointerDown = () => {
+      isDrawing = true;
+    };
+    
+    const handlePointerUp = (activeTool: { type?: string }) => {
+      if (!notEndingArrow) return;
+      
+      // After an arrow is drawn, wait a moment then start a new arrow from the end
+      if (isDrawing && activeTool.type === 'arrow') {
+        isDrawing = false;
+        const elements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
+        const lastArrow = elements.find((el: any) => el.type === 'arrow' && el.id !== lastArrowId);
+        
+        if (lastArrow) {
+          lastArrowId = lastArrow.id;
+          // Get the end point of the last arrow
+          const points = (lastArrow as any).points || [];
+          if (points.length >= 2) {
+            // Switch back to arrow tool to continue drawing
+            window.setTimeout(() => {
+              if (notEndingArrow && excalidrawAPI) {
+                (excalidrawAPI as any).setActiveTool?.({ 
+                  type: 'arrow',
+                  nativePenSDK: undefined,
+                });
+              }
+            }, 50);
+          }
+        }
+      }
+    };
+    
+    const unsubPointerDown = excalidrawAPI.onPointerDown?.(handlePointerDown);
+    const unsubPointerUp = excalidrawAPI.onPointerUp?.(handlePointerUp);
+    
+    return () => {
+      unsubPointerDown?.();
+      unsubPointerUp?.();
+    };
+  }, [excalidrawAPI, notEndingArrow]);
+
+  // Handle escape and right-click to stop not-ending arrow mode
+  useEffect(() => {
+    if (!notEndingArrow) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setNotEndingArrow(false);
+        if (excalidrawAPI) {
+          (excalidrawAPI as any).setActiveTool?.({ type: 'selection' });
+        }
+      }
+    };
+    
+    const handleContextMenu = () => {
+      if (notEndingArrow) {
+        setNotEndingArrow(false);
+        if (excalidrawAPI) {
+          (excalidrawAPI as any).setActiveTool?.({ type: 'selection' });
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('contextmenu', handleContextMenu);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [notEndingArrow, excalidrawAPI]);
 
   // Build slides: first slide is whole canvas, then each frame is a slide
   useEffect(() => {
@@ -763,6 +1034,59 @@ export const Editor: React.FC = () => {
     );
   }
 
+  const insertCustomElement = (type: 'checkbox' | 'correct-incorrect' | 'star-rating') => {
+    if (!excalidrawAPI) return;
+    const currentElements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
+    const appState = excalidrawAPI.getAppState?.() || {};
+    const centerX = ((appState as any).scrollX || 200) + 200;
+    const centerY = ((appState as any).scrollY || 200) + 200;
+    const uid = () => `el-${Math.random().toString(36).slice(2)}`;
+
+    let newEl: LooseElement;
+
+    if (type === 'checkbox') {
+      newEl = {
+        id: uid(), type: 'rectangle', x: centerX, y: centerY, width: 24, height: 24,
+        angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+        strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+        frameId: null, roundness: { type: 3, value: 32 }, seed: Math.floor(Math.random() * 10000),
+        version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+        boundElements: [], updated: Date.now(), link: null, locked: false,
+        customData: { templateRole: 'checkbox', checked: false },
+      };
+    } else if (type === 'correct-incorrect') {
+      newEl = {
+        id: uid(), type: 'ellipse', x: centerX, y: centerY, width: 24, height: 24,
+        angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+        strokeWidth: 2, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+        frameId: null, roundness: { type: 2 }, seed: Math.floor(Math.random() * 10000),
+        version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+        boundElements: [], updated: Date.now(), link: null, locked: false,
+        customData: { templateRole: 'correct-incorrect', status: 'empty' },
+      };
+    } else {
+      // star-rating
+      newEl = {
+        id: uid(), type: 'text', x: centerX, y: centerY, width: 120, height: 24,
+        angle: 0, strokeColor: '#fbbf24', backgroundColor: 'transparent', fillStyle: 'hachure',
+        strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+        frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+        version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+        boundElements: [], updated: Date.now(), link: null, locked: false,
+        text: '☆☆☆☆☆', fontSize: 24, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+        baseline: 18, containerId: null, originalText: '☆☆☆☆☆', lineHeight: 1.25,
+        customData: { templateRole: 'star-rating', rating: 0 },
+      };
+    }
+
+    const mergedElements = [...currentElements, newEl] as ExcalidrawElement[];
+    excalidrawAPI.updateScene({ elements: mergedElements });
+    const elId = newEl.id as string;
+    const selectedIds: Record<string, boolean> = { [elId]: true };
+    (excalidrawAPI as any).setAppState?.({ selectedElementIds: selectedIds });
+    setSaveStatus('unsaved');
+  };
+
   return (
     <div className={styles.container}>
       <div className={`${styles.toolbar} ${presentationMode ? styles.toolbarHidden : ''}`}>
@@ -804,15 +1128,6 @@ export const Editor: React.FC = () => {
           >
             <History size={16} />
             {revisionCount > 0 && <span className={styles.revisionBadge}>{revisionCount}</span>}
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleManualSave}
-            loading={isSaving}
-            disabled={saveStatus === 'saved'}
-          >
-            <Save size={16} />
-            {t('editor.saveNow')}
           </Button>
           <Button
             variant="ghost"
@@ -904,6 +1219,60 @@ export const Editor: React.FC = () => {
           >
             <Plus size={16} />
           </Button>
+          <div className={styles.toolbarDivider} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertCustomElement('checkbox')}
+            title="Insert checkbox"
+            aria-label="Insert a toggleable checkbox"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertCustomElement('correct-incorrect')}
+            title="Insert correct/incorrect"
+            aria-label="Insert a correct/incorrect toggle"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => insertCustomElement('star-rating')}
+            title="Insert star rating"
+            aria-label="Insert a star rating element"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
+              <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
+            </svg>
+          </Button>
+          <Button
+            variant={notEndingArrow ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => {
+              setNotEndingArrow(!notEndingArrow);
+              if (excalidrawAPI) {
+                const newTool = !notEndingArrow ? 'arrow' : 'selection';
+                (excalidrawAPI as any).setActiveTool?.({ type: newTool });
+              }
+            }}
+            title="Not-ending arrow (draws curved arrow that continues until you click)"
+            aria-label="Toggle not-ending arrow mode"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+              <path d="M19 3c-2 2-4 4-4 7 0 2-2 4-4 5" strokeDasharray="2 2" />
+            </svg>
+          </Button>
         </div>
       </div>
       <div className={styles.canvasWrapper}>
@@ -925,8 +1294,10 @@ export const Editor: React.FC = () => {
                     saveToActiveFile: false,
                     loadScene: false,
                     export: { saveFileToDisk: false },
+                    importFiles: true,
                   },
                 }}
+                isMobile={false}
               />
             </React.Suspense>
           )}
