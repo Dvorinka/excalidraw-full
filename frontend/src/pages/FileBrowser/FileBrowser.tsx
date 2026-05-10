@@ -35,7 +35,7 @@ export const FileBrowser: React.FC = () => {
   const [renameValue, setRenameValue] = useState('');
 
   // Move state
-  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moveModalDrawing, setMoveModalDrawing] = useState<Drawing | null>(null);
 
   // Folder menu state
   const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
@@ -227,8 +227,7 @@ export const FileBrowser: React.FC = () => {
     try {
       await api.drawings.update(drawing.id, { folder_id: folderId });
       setDrawings(drawings.map(d => d.id === drawing.id ? { ...d, folder_id: folderId } : d));
-      setMovingId(null);
-      setActiveMenu(null);
+      setMoveModalDrawing(null);
     } catch (err) {
       console.error('Failed to move drawing:', err);
       showModal('alert', 'Error', 'Failed to move drawing. Please try again.');
@@ -284,23 +283,36 @@ export const FileBrowser: React.FC = () => {
 
   // Drag and drop handlers for folders
   const handleDragStart = (e: React.DragEvent, folderId: string) => {
+    const target = e.target as HTMLElement;
+    const isHandle = target.closest(`.${styles.dragHandleWrapper}`) !== null;
+    if (!isHandle) {
+      e.preventDefault();
+      return;
+    }
     setDraggedFolderId(folderId);
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     if (draggedFolderId && draggedFolderId !== folderId) {
       setDragOverFolderId(folderId);
     }
   };
 
-  const handleDragLeave = () => {
+  const handleDragLeave = (e: React.DragEvent) => {
+    const related = e.relatedTarget as HTMLElement;
+    const current = e.currentTarget as HTMLElement;
+    if (related && current.contains(related)) {
+      return;
+    }
     setDragOverFolderId(null);
   };
 
   const handleDrop = async (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!draggedFolderId || draggedFolderId === targetFolderId) {
       setDraggedFolderId(null);
       setDragOverFolderId(null);
@@ -342,8 +354,15 @@ export const FileBrowser: React.FC = () => {
   // Close menu on outside click
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setActiveMenu(null);
+      }
+      if (folderMenuRef.current && !folderMenuRef.current.contains(target)) {
+        const isMenuBtn = target.closest(`.${styles.folderMenuBtn}`) !== null;
+        if (!isMenuBtn) {
+          setFolderMenuId(null);
+        }
       }
     };
     document.addEventListener('mousedown', onClick);
@@ -503,7 +522,7 @@ export const FileBrowser: React.FC = () => {
                 draggable
                 onDragStart={(e) => handleDragStart(e, folder.id)}
                 onDragOver={(e) => handleDragOver(e, folder.id)}
-                onDragLeave={handleDragLeave}
+                onDragLeave={(e) => handleDragLeave(e)}
                 onDrop={(e) => handleDrop(e, folder.id)}
                 onDragEnd={handleDragEnd}
                 className={dragOverFolderId === folder.id ? styles.dragOver : ''}
@@ -532,7 +551,13 @@ export const FileBrowser: React.FC = () => {
                     aria-current={activeFolderId === folder.id ? 'true' : undefined}
                     role="treeitem"
                   >
-                    <GripVertical size={14} className={styles.dragHandle} aria-hidden="true" />
+                    <span
+                      className={styles.dragHandleWrapper}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-hidden="true"
+                    >
+                      <GripVertical size={14} className={styles.dragHandle} />
+                    </span>
                     <Folder size={18} aria-hidden="true" />
                     <span>{folder.name}</span>
                     <button
@@ -655,18 +680,7 @@ export const FileBrowser: React.FC = () => {
                       <button onClick={(e) => { e.stopPropagation(); handleDrawingClick(drawing); setActiveMenu(null); }} className={styles.dropdownItem}>Open</button>
                       <button onClick={(e) => { e.stopPropagation(); setRenamingId(drawing.id); setRenameValue(drawing.title); setActiveMenu(null); }} className={styles.dropdownItem}>Rename</button>
                       <button onClick={(e) => { e.stopPropagation(); handleDuplicateDrawing(drawing); }} className={styles.dropdownItem}>Duplicate</button>
-                      {movingId === drawing.id ? (
-                        <div className={styles.dropdownSubmenu}>
-                          <button className={styles.dropdownSubheader}>Move to:</button>
-                          <button onClick={(e) => { e.stopPropagation(); handleMoveDrawing(drawing, null); }} className={styles.dropdownItem}>All Projects</button>
-                          {folders.map(f => (
-                            <button key={f.id} onClick={(e) => { e.stopPropagation(); handleMoveDrawing(drawing, f.id); }} className={styles.dropdownItem}>{f.name}</button>
-                          ))}
-                          <button onClick={(e) => { e.stopPropagation(); setMovingId(null); }} className={styles.dropdownItem}>Cancel</button>
-                        </div>
-                      ) : (
-                        <button onClick={(e) => { e.stopPropagation(); setMovingId(drawing.id); }} className={styles.dropdownItem}>Move to...</button>
-                      )}
+                      <button onClick={(e) => { e.stopPropagation(); setMoveModalDrawing(drawing); setActiveMenu(null); }} className={styles.dropdownItem}>Move to...</button>
                       <div className={styles.dropdownDivider} />
                       <button onClick={(e) => { e.stopPropagation(); handleDeleteDrawing(drawing); }} className={`${styles.dropdownItem} ${styles.dropdownDanger}`}>Delete</button>
                     </div>
@@ -703,6 +717,44 @@ export const FileBrowser: React.FC = () => {
               <button className={styles.modalBtnPrimary} onClick={confirmCreateDrawing} disabled={isCreating}>
                 {isCreating ? <Loader2 size={16} className={styles.spinner} /> : 'Create'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moveModalDrawing && (
+        <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="move-drawing-title" onClick={(e) => { if (e.target === e.currentTarget) setMoveModalDrawing(null); }}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3 id="move-drawing-title">Move "{moveModalDrawing.title}"</h3>
+              <button className={styles.modalClose} onClick={() => setMoveModalDrawing(null)} aria-label="Close">&times;</button>
+            </div>
+            <div className={styles.modalBody}>
+              <p className={styles.moveHint}>Select a destination:</p>
+              <div className={styles.moveList}>
+                <button
+                  className={`${styles.moveItem} ${moveModalDrawing.folder_id === null ? styles.moveItemActive : ''}`}
+                  onClick={() => handleMoveDrawing(moveModalDrawing, null)}
+                >
+                  <Folder size={18} />
+                  <span>All Projects</span>
+                  {moveModalDrawing.folder_id === null && <span className={styles.moveCurrent}>Current</span>}
+                </button>
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    className={`${styles.moveItem} ${moveModalDrawing.folder_id === f.id ? styles.moveItemActive : ''}`}
+                    onClick={() => handleMoveDrawing(moveModalDrawing, f.id)}
+                  >
+                    <Folder size={18} />
+                    <span>{f.name}</span>
+                    {moveModalDrawing.folder_id === f.id && <span className={styles.moveCurrent}>Current</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.modalBtnSecondary} onClick={() => setMoveModalDrawing(null)}>Cancel</button>
             </div>
           </div>
         </div>

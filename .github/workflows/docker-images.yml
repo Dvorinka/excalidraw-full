@@ -28,6 +28,15 @@ jobs:
         id: image
         run: echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
+      - name: Set up Docker
+        run: |
+          if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            rm get-docker.sh
+          fi
+          docker --version
+
       - name: Use GitHub token for GHCR
         uses: docker/login-action@v3
         with:
