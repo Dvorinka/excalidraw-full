@@ -48,8 +48,8 @@ function makeHandDrawnRect(x: number, y: number, w: number, h: number, groupId?:
   };
 }
 
-function makeText(x: number, y: number, text: string, fontSize = 20, groupId?: string) {
-  return {
+function makeText(x: number, y: number, text: string, fontSize = 20, groupId?: string, customData?: Record<string, unknown>) {
+  const el: RawElement = {
     id: `txt-${Math.random().toString(36).slice(2)}`,
     type: 'text',
     x, y, width: text.length * (fontSize * 0.55), height: fontSize * 1.4,
@@ -82,6 +82,10 @@ function makeText(x: number, y: number, text: string, fontSize = 20, groupId?: s
     originalText: text,
     lineHeight: 1.25,
   };
+  if (customData) {
+    el.customData = customData;
+  }
+  return el;
 }
 
 function makeCheckbox(x: number, y: number, checked = false) {
@@ -158,7 +162,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeCheckbox(60, 210, false),
     makeText(90, 210, 'Third task'),
     makeAddButton(60, 250, '+', 'todo-add'),
-    makeText(92, 250, 'Add task...', 16),
+    makeText(92, 250, 'Add task...', 16, undefined, { templateRole: 'todo-add', action: 'add' }),
     makeHandDrawnRect(50, 290, 500, 2),
     makeText(60, 310, 'Notes:', 18),
   ],
@@ -172,7 +176,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeCheckbox(60, 210, false),
     makeText(90, 210, 'Another task', 18),
     makeAddButton(60, 250, '+', 'checklist-add'),
-    makeText(92, 250, 'Add item...', 16),
+    makeText(92, 250, 'Add item...', 16, undefined, { templateRole: 'checklist-add', action: 'add' }),
   ],
   list: [
     makeHandDrawnRect(50, 50, 500, 50),
@@ -182,7 +186,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(60, 210, '• Third bullet point'),
     makeText(60, 250, '• Fourth item with details'),
     makeAddButton(60, 290, '+', 'list-add'),
-    makeText(92, 290, 'Add bullet...', 16),
+    makeText(92, 290, 'Add bullet...', 16, undefined, { templateRole: 'list-add', action: 'add' }),
   ],
   flow: [
     makeHandDrawnRect(200, 50, 200, 60),
@@ -197,7 +201,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(200, 350, 200, 60),
     makeText(230, 370, 'End', 20),
     makeAddButton(420, 180, '+', 'flow-add'),
-    makeText(452, 180, 'Add step', 14),
+    makeText(452, 180, 'Add step', 14, undefined, { templateRole: 'flow-add', action: 'add' }),
   ],
   kanban: [
     makeText(50, 40, 'Kanban Board', 30),
@@ -234,7 +238,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeCheckbox(70, 390, false),
     makeText(105, 390, 'Owner and next step', 18),
     makeAddButton(70, 430, '+', 'meeting-add-action'),
-    makeText(102, 430, 'Add action...', 14),
+    makeText(102, 430, 'Add action...', 14, undefined, { templateRole: 'meeting-add-action', action: 'add' }),
   ],
   wireframe: [
     makeText(50, 35, 'Page Wireframe', 30),
@@ -248,7 +252,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(265, 380, 190, 110),
     makeHandDrawnRect(480, 380, 190, 110),
     makeAddButton(480, 500, '+', 'wireframe-add-section'),
-    makeText(512, 500, 'Add section', 14),
+    makeText(512, 500, 'Add section', 14, undefined, { templateRole: 'wireframe-add-section', action: 'add' }),
   ],
   mindmap: [
     makeHandDrawnRect(240, 200, 200, 70),
@@ -285,7 +289,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(520, 196, 'Idea 3', 18),
     makeArrow(460, 110, 580, 180),
     makeAddButton(50, 240, '+', 'brainstorm-add'),
-    makeText(82, 240, 'Add idea...', 16),
+    makeText(82, 240, 'Add idea...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
     // Notes area
     makeHandDrawnRect(50, 280, 610, 100),
     makeText(70, 300, 'Notes & connections:', 18),
@@ -316,7 +320,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(80, 156, 'Branch 6', 18),
     makeArrow(260, 220, 200, 165),
     makeAddButton(50, 400, '+', 'brainstorm-add'),
-    makeText(82, 400, 'Add branch...', 16),
+    makeText(82, 400, 'Add branch...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   'brainstorm-matrix': [
     makeText(50, 30, 'Brainstorm — Matrix', 30),
@@ -338,7 +342,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeText(400, 350, '- Idea 1', 16),
     makeText(400, 380, '- Idea 2', 16),
     makeAddButton(50, 450, '+', 'brainstorm-add'),
-    makeText(82, 450, 'Add idea...', 16),
+    makeText(82, 450, 'Add idea...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   'brainstorm-freeform': [
     makeText(50, 30, 'Brainstorm — Freeform', 30),
@@ -355,7 +359,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(340, 250, 160, 80),
     makeText(360, 280, '✨ Idea 5', 18),
     makeAddButton(50, 360, '+', 'brainstorm-add'),
-    makeText(82, 360, 'Add note...', 16),
+    makeText(82, 360, 'Add note...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   'brainstorm-fishbone': [
     makeText(50, 30, 'Brainstorm — Fishbone', 30),
@@ -382,7 +386,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(360, 340, 160, 50),
     makeText(380, 358, 'Product', 16),
     makeAddButton(50, 420, '+', 'brainstorm-add'),
-    makeText(82, 420, 'Add cause...', 16),
+    makeText(82, 420, 'Add cause...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   'brainstorm-venn': [
     makeText(50, 30, 'Brainstorm — Venn', 30),
@@ -399,7 +403,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     // Center overlap note
     makeText(245, 190, 'Overlap', 12),
     makeAddButton(50, 400, '+', 'brainstorm-add'),
-    makeText(82, 400, 'Add set...', 16),
+    makeText(82, 400, 'Add set...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   'brainstorm-tree': [
     makeText(50, 30, 'Brainstorm — Tree', 30),
@@ -427,7 +431,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(440, 290, 140, 40),
     makeText(465, 305, 'Leaf 3a', 14),
     makeAddButton(50, 360, '+', 'brainstorm-add'),
-    makeText(82, 360, 'Add branch...', 16),
+    makeText(82, 360, 'Add branch...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   'brainstorm-converge': [
     makeText(50, 30, 'Brainstorm — Converge', 30),
@@ -450,7 +454,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(240, 350, 220, 50),
     makeText(265, 370, 'Action Plan', 16),
     makeAddButton(50, 430, '+', 'brainstorm-add'),
-    makeText(82, 430, 'Add idea...', 16),
+    makeText(82, 430, 'Add idea...', 16, undefined, { templateRole: 'brainstorm-add', action: 'add' }),
   ],
   retrospective: [
     makeText(50, 30, 'Retrospective', 30),
@@ -529,7 +533,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(50, 300, 600, 2),
     makeText(50, 320, 'Priority: High → Low (top to bottom)', 14),
     makeAddButton(50, 350, '+', 'storymap-add-row'),
-    makeText(82, 350, 'Add row...', 14),
+    makeText(82, 350, 'Add row...', 14, undefined, { templateRole: 'storymap-add-row', action: 'add' }),
   ],
   timeline: [
     makeText(50, 30, 'Project Timeline', 30),
@@ -553,7 +557,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(500, 170, 130, 50),
     makeText(515, 185, 'Deploy', 14),
     makeAddButton(80, 240, '+', 'timeline-add'),
-    makeText(112, 240, 'Add phase...', 14),
+    makeText(112, 240, 'Add phase...', 14, undefined, { templateRole: 'timeline-add', action: 'add' }),
   ],
   architecture: [
     makeText(50, 30, 'System Architecture', 30),
@@ -580,7 +584,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(50, 200, 160, 70),
     makeText(90, 220, 'CDN', 18),
     makeAddButton(300, 290, '+', 'architecture-add'),
-    makeText(332, 290, 'Add component...', 14),
+    makeText(332, 290, 'Add component...', 14, undefined, { templateRole: 'architecture-add', action: 'add' }),
   ],
   'er-diagram': [
     makeText(50, 30, 'ER Diagram', 30),
@@ -613,7 +617,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(50, 330, 600, 50),
     makeText(70, 350, 'DELETE /users/:id      → Delete user', 16),
     makeAddButton(50, 400, '+', 'api-add'),
-    makeText(82, 400, 'Add endpoint...', 14),
+    makeText(82, 400, 'Add endpoint...', 14, undefined, { templateRole: 'api-add', action: 'add' }),
   ],
   'sitemap': [
     makeText(50, 30, 'Site Map', 30),
@@ -635,7 +639,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeArrow(350, 140, 460, 180),
     makeArrow(350, 140, 630, 180),
     makeAddButton(50, 260, '+', 'sitemap-add'),
-    makeText(82, 260, 'Add page...', 14),
+    makeText(82, 260, 'Add page...', 14, undefined, { templateRole: 'sitemap-add', action: 'add' }),
   ],
   'user-persona': [
     makeText(50, 30, 'User Persona', 30),
@@ -658,7 +662,7 @@ export const BUILTIN_TEMPLATES: Record<PickedTemplate, RawElement[]> = {
     makeHandDrawnRect(50, 330, 620, 70),
     makeText(70, 352, 'Behaviors: Uses Figma, Slack, Notion. Prefers visual tools.', 14),
     makeAddButton(50, 420, '+', 'persona-add'),
-    makeText(82, 420, 'Add trait...', 14),
+    makeText(82, 420, 'Add trait...', 14, undefined, { templateRole: 'persona-add', action: 'add' }),
   ],
 };
 

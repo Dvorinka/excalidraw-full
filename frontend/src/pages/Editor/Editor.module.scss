@@ -99,6 +99,29 @@
   }
 }
 
+.canvasTools {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  background: var(--island-bg-color);
+  border: 1px solid var(--default-border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 4px;
+  box-shadow: var(--shadow-island);
+
+  button {
+    padding: 4px;
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 .loadingCanvas {
   position: absolute;
   inset: 0;
@@ -414,14 +437,13 @@
   right: 0;
   bottom: 0;
   z-index: 200;
-  pointer-events: auto;
+  pointer-events: none;
   animation: presentationFadeIn 0.3s var(--ease-out);
-  background: rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: var(--space-8);
+  justify-content: flex-end;
+  padding: var(--space-4);
 }
 
 @keyframes presentationFadeIn {
@@ -439,6 +461,7 @@
   padding: var(--space-3) var(--space-5);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   margin-bottom: var(--space-4);
+  pointer-events: auto;
 }
 
 .presentationLabel {
@@ -459,6 +482,7 @@
   box-shadow: var(--shadow-island);
   max-width: 400px;
   overflow-x: auto;
+  pointer-events: auto;
 }
 
 .presentationSlideThumb {

@@ -36,10 +36,6 @@ interface LibraryItem {
   status: string;
 }
 
-interface ArrowElement {
-  type: 'arrow';
-  points: number[][];
-}
 
 interface Slide {
   id: string;
@@ -111,6 +107,41 @@ function appStateWithoutGrid(appState: Record<string, unknown> = {}) {
   };
 }
 
+function ensureArray<T>(val: unknown): T[] {
+  if (Array.isArray(val)) return val as T[];
+  return [];
+}
+
+function ensureObject(val: unknown): Record<string, unknown> {
+  if (val && typeof val === 'object' && !Array.isArray(val)) return val as Record<string, unknown>;
+  return {};
+}
+
+function normalizeElements(elements: unknown): ExcalidrawElement[] {
+  const arr = ensureArray<Record<string, unknown>>(elements);
+  return arr.map((el) => {
+    if (!el || typeof el !== 'object') return null;
+    const normalized: Record<string, unknown> = { ...el };
+    // Ensure array fields are actually arrays
+    normalized.boundElements = ensureArray<unknown>(el.boundElements);
+    normalized.groupIds = ensureArray<unknown>(el.groupIds);
+    if (Array.isArray(el.points)) {
+      normalized.points = el.points;
+    } else if (el.points) {
+      normalized.points = [];
+    }
+    return normalized as unknown as ExcalidrawElement;
+  }).filter((el): el is ExcalidrawElement => el !== null);
+}
+
+function normalizeSnapshot(snapshot: Record<string, unknown>): ExcalidrawInitialDataState {
+  return {
+    elements: normalizeElements(snapshot.elements),
+    appState: appStateWithoutGrid(ensureObject(snapshot.appState)),
+    files: ensureObject(snapshot.files) as ExcalidrawInitialDataState['files'],
+  };
+}
+
 export const Editor: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -130,7 +161,8 @@ export const Editor: React.FC = () => {
   const currentStateRef = useRef<EditorState | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDataRef = useRef<string>('');
-  const lastToggledCheckboxRef = useRef<string | null>(null);
+  const recentlyToggledRef = useRef<Set<string>>(new Set());
+  const skipNextUnsavedRef = useRef(false);
   const lastProcessedAddRef = useRef<string | null>(null);
   const saveDrawingRef = useRef<() => Promise<void>>(async () => {});
   const isMutatingSceneRef = useRef(false);
@@ -144,7 +176,6 @@ export const Editor: React.FC = () => {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
   const [slides, setSlides] = useState<ExcalidrawElement[]>([]);
-  const [notEndingArrow, setNotEndingArrow] = useState(false);
 
   // Load drawing data
   useEffect(() => {
@@ -169,12 +200,9 @@ export const Editor: React.FC = () => {
           try {
             const rawSnapshot = revisionsData[0].snapshot;
             const snapshot = typeof rawSnapshot === 'string' ? JSON.parse(rawSnapshot) : rawSnapshot;
-            setInitialData({
-              elements: snapshot.elements || [],
-              appState: appStateWithoutGrid(snapshot.appState || {}),
-              files: snapshot.files || {},
-            });
+            setInitialData(normalizeSnapshot(snapshot));
             lastSavedDataRef.current = JSON.stringify(snapshot);
+            skipNextUnsavedRef.current = true;
           } catch (parseErr) {
             console.error('Failed to parse revision snapshot:', parseErr);
             setInitialData({
@@ -183,18 +211,16 @@ export const Editor: React.FC = () => {
               files: {},
             });
             lastSavedDataRef.current = JSON.stringify({ elements: [], appState: {}, files: {} });
+            skipNextUnsavedRef.current = true;
           }
         } else {
           // Check for pending template from dashboard
           const pendingTemplate = localStorage.getItem(`template_${id}`);
           if (pendingTemplate) {
             const tpl = JSON.parse(pendingTemplate);
-            setInitialData({
-              elements: tpl.elements || [],
-              appState: appStateWithoutGrid(tpl.appState || {}),
-              files: tpl.files || {},
-            });
+            setInitialData(normalizeSnapshot(tpl));
             lastSavedDataRef.current = JSON.stringify(tpl);
+            skipNextUnsavedRef.current = true;
             localStorage.removeItem(`template_${id}`);
           } else {
             // Start with empty canvas
@@ -204,6 +230,7 @@ export const Editor: React.FC = () => {
               files: {},
             });
             lastSavedDataRef.current = JSON.stringify({ elements: [], appState: {}, files: {} });
+            skipNextUnsavedRef.current = true;
           }
         }
       } catch (err) {
@@ -235,13 +262,28 @@ export const Editor: React.FC = () => {
       };
       // Only mark as unsaved if the data actually differs from last saved
       const currentJson = JSON.stringify(currentStateRef.current);
-      if (currentJson !== lastSavedDataRef.current) {
+      if (currentJson !== lastSavedDataRef.current && !skipNextUnsavedRef.current) {
         setSaveStatus('unsaved');
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
           saveDrawingRef.current();
         }, 2000);
       }
+      if (skipNextUnsavedRef.current) {
+        skipNextUnsavedRef.current = false;
+        lastSavedDataRef.current = currentJson;
+      }
+      return;
+    }
+
+    if (skipNextUnsavedRef.current) {
+      currentStateRef.current = {
+        elements: elements as unknown as ExcalidrawElement[],
+        appState: appStateWithoutGrid(appState),
+        files,
+      };
+      lastSavedDataRef.current = JSON.stringify(currentStateRef.current);
+      skipNextUnsavedRef.current = false;
       return;
     }
 
@@ -252,8 +294,9 @@ export const Editor: React.FC = () => {
 
     // Handle checkbox toggle
     if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.templateRole === 'checkbox') {
-      if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedEl.id) {
-        lastToggledCheckboxRef.current = selectedEl.id;
+      if (excalidrawAPI && !recentlyToggledRef.current.has(selectedEl.id)) {
+        recentlyToggledRef.current.add(selectedEl.id);
+        setTimeout(() => recentlyToggledRef.current.delete(selectedEl.id), 150);
         const nextChecked = !((selectedEl.customData as Record<string, unknown> | undefined)?.checked as boolean);
         const nextElements = elements.map((el) => (
           el.id === selectedEl.id
@@ -288,37 +331,37 @@ export const Editor: React.FC = () => {
         setSaveStatus('unsaved');
         return;
       }
-    } else {
-      lastToggledCheckboxRef.current = null;
     }
 
     // Handle correct/incorrect toggle (cycles: empty → correct → incorrect → empty)
     if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.templateRole === 'correct-incorrect') {
-      if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedEl.id) {
-        lastToggledCheckboxRef.current = selectedEl.id;
+      if (excalidrawAPI && !recentlyToggledRef.current.has(selectedEl.id)) {
+        recentlyToggledRef.current.add(selectedEl.id);
+        setTimeout(() => recentlyToggledRef.current.delete(selectedEl.id), 150);
         const currentStatus = ((selectedEl.customData as Record<string, unknown> | undefined)?.status as string) || 'empty';
         let nextStatus: string;
+        let nextText: string;
         let nextColor: string;
-        let nextFill: 'solid' | 'hachure';
         if (currentStatus === 'empty') {
           nextStatus = 'correct';
+          nextText = '☑';
           nextColor = '#22c55e';
-          nextFill = 'solid';
         } else if (currentStatus === 'correct') {
           nextStatus = 'incorrect';
+          nextText = '☒';
           nextColor = '#ef4444';
-          nextFill = 'solid';
         } else {
           nextStatus = 'empty';
+          nextText = '☐';
           nextColor = '#1e1e1e';
-          nextFill = 'hachure';
         }
         const nextElements = elements.map((el) =>
           el.id === selectedEl.id
             ? {
                 ...el,
-                backgroundColor: nextStatus === 'empty' ? 'transparent' : nextColor,
-                fillStyle: nextFill,
+                text: nextText,
+                originalText: nextText,
+                strokeColor: nextColor,
                 customData: {
                   ...((el.customData as Record<string, unknown> | undefined) || {}),
                   status: nextStatus,
@@ -349,14 +392,18 @@ export const Editor: React.FC = () => {
 
     // Handle star rating toggle
     if (selectedEl && (selectedEl.customData as Record<string, unknown> | undefined)?.templateRole === 'star-rating') {
-      if (excalidrawAPI && lastToggledCheckboxRef.current !== selectedEl.id) {
-        lastToggledCheckboxRef.current = selectedEl.id;
+      if (excalidrawAPI && !recentlyToggledRef.current.has(selectedEl.id)) {
+        recentlyToggledRef.current.add(selectedEl.id);
+        setTimeout(() => recentlyToggledRef.current.delete(selectedEl.id), 150);
         const currentRating = ((selectedEl.customData as Record<string, unknown> | undefined)?.rating as number) || 0;
         const nextRating = currentRating >= 5 ? 1 : currentRating + 1;
+        const stars = '★'.repeat(nextRating) + '☆'.repeat(5 - nextRating);
         const nextElements = elements.map((el) =>
           el.id === selectedEl.id
             ? {
                 ...el,
+                text: stars,
+                originalText: stars,
                 customData: {
                   ...((el.customData as Record<string, unknown> | undefined) || {}),
                   rating: nextRating,
@@ -388,20 +435,48 @@ export const Editor: React.FC = () => {
     // Handle "+" add button click or "Add task..." text click
     const customData = (selectedEl?.customData as Record<string, unknown> | undefined);
     const isAddButton = customData?.action === 'add';
-    const isAddText = customData?.templateRole && typeof customData.templateRole === 'string' && 
-                      (customData.templateRole.startsWith('todo-add') || 
-                       customData.templateRole.startsWith('checklist-add') ||
-                       customData.templateRole.startsWith('list-add') ||
-                       customData.templateRole.startsWith('meeting-add-action'));
+    const isAddText = selectedEl?.type === 'text' && typeof selectedEl.text === 'string' &&
+                      ((selectedEl.text.toLowerCase().includes('add task') ||
+                        selectedEl.text.toLowerCase().includes('add item') ||
+                        selectedEl.text.toLowerCase().includes('add bullet') ||
+                        selectedEl.text.toLowerCase().includes('add action') ||
+                        selectedEl.text.toLowerCase().includes('add step') ||
+                        selectedEl.text.toLowerCase().includes('add section') ||
+                        selectedEl.text.toLowerCase().includes('add idea') ||
+                        selectedEl.text.toLowerCase().includes('add branch') ||
+                        selectedEl.text.toLowerCase().includes('add note') ||
+                        selectedEl.text.toLowerCase().includes('add cause') ||
+                        selectedEl.text.toLowerCase().includes('add set') ||
+                        selectedEl.text.toLowerCase().includes('add row') ||
+                        selectedEl.text.toLowerCase().includes('add phase') ||
+                        selectedEl.text.toLowerCase().includes('add component') ||
+                        selectedEl.text.toLowerCase().includes('add endpoint') ||
+                        selectedEl.text.toLowerCase().includes('add page') ||
+                        selectedEl.text.toLowerCase().includes('add trait')));
     
     if (selectedEl && (isAddButton || isAddText) && excalidrawAPI) {
       if (lastProcessedAddRef.current === selectedEl.id) {
         return;
       }
       lastProcessedAddRef.current = selectedEl.id;
-      const role = customData?.templateRole as string;
-      const btnX = (selectedEl.x as number) || 0;
-      const btnY = (selectedEl.y as number) || 0;
+      let role = customData?.templateRole as string;
+      if (!role && isAddText) {
+        const addButton = elements.find(el =>
+          el.type === 'rectangle' &&
+          (el.customData as Record<string, unknown> | undefined)?.action === 'add' &&
+          Math.abs((el.y as number) - (selectedEl.y as number)) < 60
+        );
+        role = (addButton?.customData as Record<string, unknown> | undefined)?.templateRole as string;
+      }
+      const resolvedBtn = isAddText
+        ? elements.find(el =>
+            el.type === 'rectangle' &&
+            (el.customData as Record<string, unknown> | undefined)?.action === 'add' &&
+            Math.abs((el.y as number) - (selectedEl.y as number)) < 60
+          )
+        : selectedEl;
+      const btnX = (resolvedBtn?.x as number) || 0;
+      const btnY = (resolvedBtn?.y as number) || 0;
       const newElements: LooseElement[] = [];
       const uid = () => `el-${Math.random().toString(36).slice(2)}`;
       const tid = () => `txt-${Math.random().toString(36).slice(2)}`;
@@ -419,8 +494,8 @@ export const Editor: React.FC = () => {
            (el.text as string)?.toLowerCase().includes('add bullet'))
         );
         
-        // Add a new checkbox + text row below the button
-        const newY = btnY + 30;
+        // Add a new checkbox + text row where the button currently is
+        const newY = btnY;
         newElements.push({
           id: uid(), type: 'rectangle', x: btnX, y: newY, width: 20, height: 20,
           angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
@@ -440,9 +515,9 @@ export const Editor: React.FC = () => {
           text: 'New task', fontSize: 18, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
           baseline: 16, containerId: null, originalText: 'New task', lineHeight: 1.25,
         });
-        
-        // Move the add button and "Add task..." text down, plus any notes line for todo
-        const moveDown = newY + 40;
+
+        // Move the add button and "Add task..." text down by one slot
+        const moveDown = btnY + 40;
         const updated = elements.map((el) => {
           // Move the add button
           if (addButtonEl && el.id === addButtonEl.id) {
@@ -566,39 +641,261 @@ export const Editor: React.FC = () => {
         return;
       }
 
-      // Generic add: add a text line below
-      if (role?.startsWith('list-add') || role?.startsWith('meeting-add') || role?.startsWith('flow-add') ||
-          role?.startsWith('brainstorm-add') || role?.startsWith('retro-add') || role?.startsWith('swot-add') ||
-          role?.startsWith('storymap-add') || role?.startsWith('wireframe-add') || role?.startsWith('timeline-add') ||
-          role?.startsWith('architecture-add')) {
-        // Find the associated add text to move together
-        const addButtonEl = elements.find(el => 
-          el.type === 'rectangle' && 
+      // Generic add handler for all templates
+      const genericRoles = ['list-add', 'meeting-add', 'flow-add', 'brainstorm-add', 'retro-add',
+        'swot-add', 'storymap-add', 'wireframe-add', 'timeline-add', 'architecture-add',
+        'api-add', 'sitemap-add', 'persona-add'];
+      if (genericRoles.some((r) => role?.startsWith(r))) {
+        const addButtonEl = elements.find(el =>
+          el.type === 'rectangle' &&
           (el.customData as Record<string, unknown> | undefined)?.templateRole === role
         );
-        const addTextEl = elements.find(el => 
-          el.type === 'text' && 
-          ((el.text as string)?.toLowerCase().includes('add') ||
-           (el.text as string)?.toLowerCase().includes('step') ||
-           (el.text as string)?.toLowerCase().includes('bullet') ||
-           (el.text as string)?.toLowerCase().includes('action'))
+        const addTextEl = elements.find(el =>
+          el.type === 'text' &&
+          (el.customData as Record<string, unknown> | undefined)?.templateRole === role
         );
-        
-        const newY = btnY + 30;
-        newElements.push({
-          id: tid(), type: 'text', x: btnX + 30, y: newY, width: 150, height: 22,
-          angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
-          strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
-          frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
-          version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
-          boundElements: [], updated: Date.now(), link: null, locked: false,
-          text: role?.startsWith('list-add') ? '• New item' : '- New item',
-          fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
-          baseline: 14, containerId: null, originalText: role?.startsWith('list-add') ? '• New item' : '- New item', lineHeight: 1.25,
-        });
-        
+
+        const newY = btnY;
+        let slotHeight = 30;
+
+        // Role-specific element creation
+        if (role?.startsWith('brainstorm-add')) {
+          // Sticky note style: rectangle + text
+          const gid = `note-${uid()}`;
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX, y: newY, width: 160, height: 50,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: '#fef3c7', fillStyle: 'solid',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [gid],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX + 15, y: newY + 14, width: 130, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [gid],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New idea', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: 'New idea', lineHeight: 1.25,
+          });
+          slotHeight = 60;
+        } else if (role?.startsWith('retro-add-well') || role?.startsWith('retro-add-improve')) {
+          newElements.push({
+            id: tid(), type: 'text', x: btnX, y: newY, width: 150, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: '- New item', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: '- New item', lineHeight: 1.25,
+          });
+          slotHeight = 30;
+        } else if (role?.startsWith('retro-add-action')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX, y: newY, width: 20, height: 20,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 32 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            customData: { templateRole: 'checkbox', checked: false },
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX + 30, y: newY + 2, width: 120, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New action', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: 'New action', lineHeight: 1.25,
+          });
+          slotHeight = 30;
+        } else if (role?.startsWith('swot-add')) {
+          newElements.push({
+            id: tid(), type: 'text', x: btnX, y: newY, width: 200, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: '- New item', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: '- New item', lineHeight: 1.25,
+          });
+          slotHeight = 30;
+        } else if (role?.startsWith('storymap-add-step')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX, y: newY, width: 120, height: 40,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX + 10, y: newY + 10, width: 100, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New step', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: 'New step', lineHeight: 1.25,
+          });
+          slotHeight = 50;
+        } else if (role?.startsWith('storymap-add-story')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX, y: newY, width: 120, height: 35,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: '#e0f2fe', fillStyle: 'solid',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX + 8, y: newY + 8, width: 100, height: 20,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New story', fontSize: 14, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 12, containerId: null, originalText: 'New story', lineHeight: 1.25,
+          });
+          slotHeight = 45;
+        } else if (role?.startsWith('storymap-add-row')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX, y: newY + 10, width: 600, height: 2,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: '#1e1e1e', fillStyle: 'solid',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX, y: newY + 20, width: 200, height: 20,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New epic row', fontSize: 14, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 12, containerId: null, originalText: 'New epic row', lineHeight: 1.25,
+          });
+          slotHeight = 40;
+        } else if (role?.startsWith('wireframe-add')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX - 430, y: newY, width: 190, height: 110,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX - 410, y: newY + 45, width: 150, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New section', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: 'New section', lineHeight: 1.25,
+          });
+          slotHeight = 120;
+        } else if (role?.startsWith('timeline-add')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX - 30, y: newY + 30, width: 130, height: 50,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX - 15, y: newY + 45, width: 100, height: 20,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New task', fontSize: 14, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 12, containerId: null, originalText: 'New task', lineHeight: 1.25,
+          });
+          slotHeight = 80;
+        } else if (role?.startsWith('api-add')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX - 30, y: newY, width: 600, height: 50,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX, y: newY + 14, width: 400, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'GET    /new-endpoint      → Description', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: 'GET    /new-endpoint      → Description', lineHeight: 1.25,
+          });
+          slotHeight = 60;
+        } else if (role?.startsWith('sitemap-add')) {
+          newElements.push({
+            id: uid(), type: 'rectangle', x: btnX, y: newY, width: 140, height: 50,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: { type: 3, value: 12 }, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+          });
+          newElements.push({
+            id: tid(), type: 'text', x: btnX + 20, y: newY + 14, width: 100, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: 'New page', fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: 'New page', lineHeight: 1.25,
+          });
+          slotHeight = 60;
+        } else if (role?.startsWith('persona-add')) {
+          newElements.push({
+            id: tid(), type: 'text', x: btnX, y: newY, width: 300, height: 20,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: '- New trait', fontSize: 14, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 12, containerId: null, originalText: '- New trait', lineHeight: 1.25,
+          });
+          slotHeight = 24;
+        } else {
+          // Default: simple text line
+          newElements.push({
+            id: tid(), type: 'text', x: btnX + 30, y: newY, width: 150, height: 22,
+            angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
+            strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+            frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
+            version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
+            boundElements: [], updated: Date.now(), link: null, locked: false,
+            text: role?.startsWith('list-add') ? '• New item' : '- New item',
+            fontSize: 16, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+            baseline: 14, containerId: null, originalText: role?.startsWith('list-add') ? '• New item' : '- New item', lineHeight: 1.25,
+          });
+          slotHeight = 30;
+        }
+
         // Move both the add button and the add text
-        const moveDown = newY + 30;
+        const moveDown = btnY + slotHeight;
         const updated = elements.map((el) => {
           if (addButtonEl && el.id === addButtonEl.id) {
             return { ...el, y: moveDown, version: el.version + 1, versionNonce: Math.floor(Math.random() * 1000000), updated: Date.now() };
@@ -703,11 +1000,7 @@ export const Editor: React.FC = () => {
     if (!revision.snapshot) return;
     try {
       const snapshot = typeof revision.snapshot === 'string' ? JSON.parse(revision.snapshot) : revision.snapshot;
-      setInitialData({
-        elements: snapshot.elements || [],
-        appState: appStateWithoutGrid(snapshot.appState || {}),
-        files: snapshot.files || {},
-      });
+      setInitialData(normalizeSnapshot(snapshot));
       lastSavedDataRef.current = JSON.stringify(snapshot);
       setSelectedRevision(revision.id);
       setSaveStatus('saved');
@@ -786,163 +1079,100 @@ export const Editor: React.FC = () => {
     { id: 'user-persona', label: 'User Persona', description: 'Goals, frustrations, behaviors', icon: null },
   ];
 
-  useEffect(() => {
-    if (!excalidrawAPI?.onPointerUp) return undefined;
-
-    return excalidrawAPI.onPointerUp((activeTool: { type?: string; locked?: boolean }) => {
-      if ((activeTool.type === 'line' || activeTool.type === 'arrow') && !activeTool.locked) {
-        window.setTimeout(() => {
-          excalidrawAPI.setActiveTool?.({ type: 'selection' });
-        }, 0);
-      }
-    });
-  }, [excalidrawAPI]);
-
   // Library import from URL hash (#addLibrary=...)
-  useEffect(() => {
+  const processLibraryImport = React.useCallback(() => {
     if (!excalidrawAPI) return;
     const hash = window.location.hash;
     const match = hash.match(/addLibrary=([^&]+)/);
-    if (match) {
-      const libraryUrl = decodeURIComponent(match[1]);
-      fetch(libraryUrl)
-        .then((r) => {
-          if (!r.ok) {
-            throw new Error(`HTTP error! status: ${r.status}`);
-          }
-          return r.json();
-        })
-        .then((data) => {
-          // Excalidraw library items come in various formats
-          let libraryItems = data.libraryItems || data.library || data;
-          // Normalize to Excalidraw's expected library item format: { id, elements, status }
-          if (Array.isArray(libraryItems)) {
-            libraryItems = libraryItems.map((item: Record<string, unknown>): LibraryItem => {
-              if (item.libraryItem) {
-                return { id: (item.id as string) || (item.libraryItem as Record<string, unknown>).id as string || `item-${Math.random().toString(36).slice(2, 9)}`, elements: (item.libraryItem as Record<string, unknown>).elements as ExcalidrawElement[] || [], status: 'published' };
-              }
-              if (item.data) {
-                return { id: (item.id as string) || `item-${Math.random().toString(36).slice(2, 9)}`, elements: ((item.data as Record<string, unknown>).elements as ExcalidrawElement[]) || (item.elements as ExcalidrawElement[]) || [], status: 'published' };
-              }
-              if (item.elements) {
-                return { id: (item.id as string) || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.elements as ExcalidrawElement[], status: 'published' };
-              }
-              return item as unknown as LibraryItem;
-            }).filter((item: LibraryItem) => item.elements && Array.isArray(item.elements) && item.elements.length > 0);
-          }
-          // Validate libraryItems is a valid array before proceeding
-          if (!Array.isArray(libraryItems) || libraryItems.length === 0) {
-            console.warn('Library import failed: No valid library items found');
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            return;
-          }
-          // Use the Excalidraw imperative API to add library items
-          try {
-            const api = excalidrawAPI as any;
-            if (api.updateLibraryItems) {
-              api.updateLibraryItems(libraryItems, 'merge');
-            } else if (api.updateScene) {
-              // Fallback: add elements directly to the canvas at center
-              const currentElements = api.getSceneElements?.() || [];
-              const newElements = libraryItems.flatMap((item: LibraryItem) => item.elements || []);
-              if (newElements.length > 0) {
-                api.updateScene({
-                  elements: [...currentElements, ...newElements] as ExcalidrawElement[],
-                });
-              }
+    if (!match) return;
+    const libraryUrl = decodeURIComponent(match[1]);
+    fetch(libraryUrl)
+      .then((r) => {
+        if (!r.ok) {
+          throw new Error(`HTTP error! status: ${r.status}`);
+        }
+        return r.json();
+      })
+      .then((data) => {
+        // Excalidraw library items come in various formats
+        let libraryItems = data.libraryItems || data.library || data;
+        // Normalize to Excalidraw's expected library item format: { id, elements, status }
+        if (Array.isArray(libraryItems)) {
+          libraryItems = libraryItems.map((item: Record<string, unknown>): LibraryItem => {
+            if (item.libraryItem) {
+              return { id: (item.id as string) || (item.libraryItem as Record<string, unknown>).id as string || `item-${Math.random().toString(36).slice(2, 9)}`, elements: (item.libraryItem as Record<string, unknown>).elements as ExcalidrawElement[] || [], status: 'published' };
             }
-          } catch (e) {
-            console.warn('Library import failed:', e);
+            if (item.data) {
+              return { id: (item.id as string) || `item-${Math.random().toString(36).slice(2, 9)}`, elements: ((item.data as Record<string, unknown>).elements as ExcalidrawElement[]) || (item.elements as ExcalidrawElement[]) || [], status: 'published' };
+            }
+            if (item.elements) {
+              return { id: (item.id as string) || `item-${Math.random().toString(36).slice(2, 9)}`, elements: item.elements as ExcalidrawElement[], status: 'published' };
+            }
+            return item as unknown as LibraryItem;
+          }).filter((item: LibraryItem) => item.elements && Array.isArray(item.elements) && item.elements.length > 0);
+        }
+        // Validate libraryItems is a valid array before proceeding
+        if (!Array.isArray(libraryItems) || libraryItems.length === 0) {
+          console.warn('Library import failed: No valid library items found');
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          return;
+        }
+        // Use the Excalidraw imperative API to add library items
+        try {
+          const api = excalidrawAPI as any;
+          if (api.updateLibraryItems) {
+            api.updateLibraryItems(libraryItems, 'merge');
+          } else if (api.updateScene) {
+            // Fallback: add elements directly to the canvas
+            const currentElements = api.getSceneElements?.() || [];
+            const importedElements = libraryItems.flatMap((item: LibraryItem) => item.elements || []);
+            if (importedElements.length > 0) {
+              // Offset imported elements to current viewport center
+              const appState = api.getAppState?.() || {};
+              const offsetX = ((appState.scrollX as number) || 0) + 200;
+              const offsetY = ((appState.scrollY as number) || 0) + 200;
+              const minX = Math.min(...importedElements.map((el: ExcalidrawElement) => el.x));
+              const minY = Math.min(...importedElements.map((el: ExcalidrawElement) => el.y));
+              const shiftedElements = importedElements.map((el: ExcalidrawElement) => ({
+                ...el,
+                id: `lib-${Math.random().toString(36).slice(2, 9)}-${el.id}`,
+                x: el.x - minX + offsetX,
+                y: el.y - minY + offsetY,
+                version: (el.version || 1) + 1,
+                versionNonce: Math.floor(Math.random() * 1000000),
+                updated: Date.now(),
+              }));
+              api.updateScene({
+                elements: [...currentElements, ...shiftedElements] as ExcalidrawElement[],
+              });
+            }
           }
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        })
-        .catch((err) => {
-          console.error('Failed to load library:', err);
-          // Clear the hash even on error to prevent repeated failed attempts
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        });
-    }
+        } catch (e) {
+          console.warn('Library import failed:', e);
+        }
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      })
+      .catch((err) => {
+        console.error('Failed to load library:', err);
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      });
   }, [excalidrawAPI]);
 
+  useEffect(() => {
+    processLibraryImport();
+  }, [processLibraryImport]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash.includes('addLibrary=')) {
+        processLibraryImport();
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [processLibraryImport]);
+
   // Not-ending arrow mode: auto-continue drawing arrows
-  useEffect(() => {
-    if (!excalidrawAPI || !notEndingArrow) return;
-    
-    let lastArrowId: string | null = null;
-    let isDrawing = false;
-    
-    const handlePointerDown = () => {
-      isDrawing = true;
-    };
-    
-    const handlePointerUp = (activeTool: { type?: string }) => {
-      if (!notEndingArrow) return;
-      
-      // After an arrow is drawn, wait a moment then start a new arrow from the end
-      if (isDrawing && activeTool.type === 'arrow') {
-        isDrawing = false;
-        const elements = (excalidrawAPI.getSceneElements?.() || []) as ExcalidrawElement[];
-        const lastArrow = elements.find((el: ExcalidrawElement): el is ExcalidrawElement & ArrowElement => el.type === 'arrow' && el.id !== lastArrowId);
-
-        if (lastArrow) {
-          lastArrowId = lastArrow.id;
-          // Get the end point of the last arrow
-          const points = (lastArrow as ArrowElement).points || [];
-          if (points.length >= 2) {
-            // Switch back to arrow tool to continue drawing
-            window.setTimeout(() => {
-              if (notEndingArrow && excalidrawAPI) {
-                (excalidrawAPI as any).setActiveTool?.({
-                  type: 'arrow',
-                  nativePenSDK: undefined,
-                });
-              }
-            }, 50);
-          }
-        }
-      }
-    };
-    
-    const unsubPointerDown = excalidrawAPI.onPointerDown?.(handlePointerDown);
-    const unsubPointerUp = excalidrawAPI.onPointerUp?.(handlePointerUp);
-    
-    return () => {
-      unsubPointerDown?.();
-      unsubPointerUp?.();
-    };
-  }, [excalidrawAPI, notEndingArrow]);
-
-  // Handle escape and right-click to stop not-ending arrow mode
-  useEffect(() => {
-    if (!notEndingArrow) return;
-    
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setNotEndingArrow(false);
-        if (excalidrawAPI) {
-          (excalidrawAPI as any).setActiveTool?.({ type: 'selection' });
-        }
-      }
-    };
-
-    const handleContextMenu = () => {
-      if (notEndingArrow) {
-        setNotEndingArrow(false);
-        if (excalidrawAPI) {
-          (excalidrawAPI as any).setActiveTool?.({ type: 'selection' });
-        }
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('contextmenu', handleContextMenu);
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('contextmenu', handleContextMenu);
-    };
-  }, [notEndingArrow, excalidrawAPI]);
-
   // Build slides: first slide is whole canvas, then each frame is a slide
   useEffect(() => {
     if (!presentationMode || !excalidrawAPI) return;
@@ -1052,12 +1282,14 @@ export const Editor: React.FC = () => {
       };
     } else if (type === 'correct-incorrect') {
       newEl = {
-        id: uid(), type: 'ellipse', x: centerX, y: centerY, width: 24, height: 24,
+        id: uid(), type: 'text', x: centerX, y: centerY, width: 24, height: 24,
         angle: 0, strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'hachure',
-        strokeWidth: 2, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
-        frameId: null, roundness: { type: 2 }, seed: Math.floor(Math.random() * 10000),
+        strokeWidth: 1, strokeStyle: 'solid', roughness: 1, opacity: 100, groupIds: [],
+        frameId: null, roundness: null, seed: Math.floor(Math.random() * 10000),
         version: 2, versionNonce: Math.floor(Math.random() * 100000), isDeleted: false,
         boundElements: [], updated: Date.now(), link: null, locked: false,
+        text: '☐', fontSize: 24, fontFamily: 1, textAlign: 'left', verticalAlign: 'top',
+        baseline: 18, containerId: null, originalText: '☐', lineHeight: 1.25,
         customData: { templateRole: 'correct-incorrect', status: 'empty' },
       };
     } else {
@@ -1215,64 +1447,49 @@ export const Editor: React.FC = () => {
           >
             <Plus size={16} />
           </Button>
-          <div className={styles.toolbarDivider} />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertCustomElement('checkbox')}
-            title="Insert checkbox"
-            aria-label="Insert a toggleable checkbox"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertCustomElement('correct-incorrect')}
-            title="Insert correct/incorrect"
-            aria-label="Insert a correct/incorrect toggle"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertCustomElement('star-rating')}
-            title="Insert star rating"
-            aria-label="Insert a star rating element"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
-              <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
-            </svg>
-          </Button>
-          <Button
-            variant={notEndingArrow ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => {
-              setNotEndingArrow(!notEndingArrow);
-              if (excalidrawAPI) {
-                const newTool = !notEndingArrow ? 'arrow' : 'selection';
-                (excalidrawAPI as any).setActiveTool?.({ type: newTool });
-              }
-            }}
-            title="Not-ending arrow (draws curved arrow that continues until you click)"
-            aria-label="Toggle not-ending arrow mode"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M5 12h14M12 5l7 7-7 7" />
-              <path d="M19 3c-2 2-4 4-4 7 0 2-2 4-4 5" strokeDasharray="2 2" />
-            </svg>
-          </Button>
         </div>
       </div>
       <div className={styles.canvasWrapper}>
         <div className={`${styles.canvas} ${(showRevisions || showNotes || showTemplates) ? styles.canvasNarrow : ''}`}>
+          {!presentationMode && (
+            <div className={styles.canvasTools}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => insertCustomElement('checkbox')}
+                title="Insert checkbox"
+                aria-label="Insert a toggleable checkbox"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="3" />
+                  <path d="M9 12l2 2 4-4" />
+                </svg>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => insertCustomElement('correct-incorrect')}
+                title="Insert correct/incorrect"
+                aria-label="Insert a correct/incorrect toggle"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M8 12l3 3 5-5" />
+                </svg>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => insertCustomElement('star-rating')}
+                title="Insert star rating"
+                aria-label="Insert a star rating element"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                  <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
+                </svg>
+              </Button>
+            </div>
+          )}
           {initialData && (
             <React.Suspense fallback={<div className={styles.loadingCanvas}>{t('editor.loadingCanvas')}</div>}>
               <ExcalidrawWithLibrary
